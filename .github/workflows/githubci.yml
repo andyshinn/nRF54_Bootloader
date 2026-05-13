@@ -36,6 +36,8 @@ jobs:
   build:
     needs: set-matrix
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
