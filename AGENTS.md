@@ -7,19 +7,21 @@ This repo ships as the PlatformIO package `framework-arduinoadafruitnrf54-bootlo
 `builder/frameworks/arduino/adafruit.py` in the platform repo resolves the DFU bootloader hex with:
 
 ```
-{BOOTLOADER_DIR}/bin/{variant}_bootloader.hex
+{BOOTLOADER_DIR}/release/{variant}_bootloader.hex
 ```
 
 `{variant}` matches `build.variant` in the consuming platform's `boards/<variant>.json` and the directory name under `src/boards/<variant>/` here. Renaming a board means renaming all three in lockstep.
 
-The `bin/` directory keeps the released package's source tree (master) free of generated binaries — only release tags carry `bin/`. All per-board hex files live alongside each other (filenames already carry the variant prefix), no nested per-board folders.
+The `release/` directory keeps the released package's source tree (master) free of generated binaries — only release tags carry `release/`. All per-board hex files live alongside each other (filenames already carry the variant prefix), no nested per-board folders.
+
+Note: `bin/` is in `.gitignore` for local-build output (legacy from the upstream Makefile), which is why this uses `release/` instead.
 
 # Release flow
 
 `.github/workflows/githubci.yml` builds a hex per board in matrix and, on `release` events only, runs a `commit-binaries` job that:
 
 1. Checks out the release tag.
-2. Drops each `bin/<variant>_bootloader.hex` into the worktree.
+2. Drops each `release/<variant>_bootloader.hex` into the worktree.
 3. Commits and **force-updates the release tag** so the tag points at the new commit containing the binaries.
 
 Master will not gain the `bin/` tree — that's intentional. Consumers pin to a tag (`#vX.Y.Z`) and get a tree with matching binaries.

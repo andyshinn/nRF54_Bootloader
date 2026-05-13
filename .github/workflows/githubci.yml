@@ -100,10 +100,10 @@ jobs:
         with:
           path: _artifacts
 
-      - name: Stage hex files into bin/
+      - name: Stage hex files into release/
         run: |
           set -euo pipefail
-          mkdir -p bin
+          mkdir -p release
           for board_dir in _artifacts/*/; do
             board=$(basename "$board_dir")
             hex="${board_dir}${board}_bootloader.hex"
@@ -111,8 +111,8 @@ jobs:
               echo "::error::Missing $hex"
               exit 1
             fi
-            cp "$hex" "bin/${board}_bootloader.hex"
-            git add "bin/${board}_bootloader.hex"
+            cp "$hex" "release/${board}_bootloader.hex"
+            git add "release/${board}_bootloader.hex"
           done
           rm -rf _artifacts
 
