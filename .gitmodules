@@ -1,0 +1,6 @@
+[submodule "lib/tinycrypt"]
+	path = lib/tinycrypt
+	url = https://github.com/intel/tinycrypt
+[submodule "lib/nrfx"]
+	path = lib/nrfx
+	url = https://github.com/NordicSemiconductor/nrfx.git
