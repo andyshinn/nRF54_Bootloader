@@ -23,7 +23,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set matrix
         id: set-matrix
@@ -44,13 +44,13 @@ jobs:
         board: ${{ fromJSON(needs.set-matrix.outputs.matrix) }}
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
         submodules: true
 
     - name: Install ARM GCC
-      uses: carlosperate/arm-none-eabi-gcc-action@v1.12.1
+      uses: carlosperate/arm-none-eabi-gcc-action@v1.12.3
       with:
         release: '12.3.Rel1'
 
@@ -69,13 +69,13 @@ jobs:
         cp _build_cmake/bootloader.hex _bin/${{ matrix.board }}/${{ matrix.board }}_bootloader.hex
         cp _build_cmake/bootloader.elf _bin/${{ matrix.board }}/${{ matrix.board }}_bootloader.elf
 
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v7
       with:
         name: ${{ matrix.board }}
         path: _bin/${{ matrix.board }}
 
     - name: Upload Release Asset
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       if: ${{ github.event_name == 'release' }}
       with:
         files: |
@@ -89,14 +89,14 @@ jobs:
       contents: write
     steps:
       - name: Checkout release tag
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download all bootloader artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           path: _artifacts
 
