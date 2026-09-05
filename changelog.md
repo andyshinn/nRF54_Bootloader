@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-09-05
 
 **Added:** nRF54LM20A support (Cortex-M33 @128 MHz, 2 MB RRAM, 512 KB RAM) and
 the first board for it, Seeed XIAO nRF54LM20A (`xiao_nrf54lm20a`). Pin mapping
