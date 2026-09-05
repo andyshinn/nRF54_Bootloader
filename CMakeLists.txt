@@ -251,7 +251,10 @@ elseif (MCU_VARIANT STREQUAL "nrf54l05")
   target_compile_definitions(bootloader PUBLIC NRF54L05_XXAA NRF54L15_XXAA)
 elseif (MCU_VARIANT STREQUAL "nrf54lm20a")
   set(DFU_DEV_REV 54120)
-  set(DFU_APP_DATA_RESERVED 10*4096)
+  # 9 pages: 28 KB InternalFS + the 8 KB gap below the bootloader. Matches
+  # FLASH LENGTH 0x1C6000 in the core's nrf54lm20a_s145_v10.ld and
+  # upload.maximum_size in boards/xiao_nrf54lm20a.json.
+  set(DFU_APP_DATA_RESERVED 9*4096)
   set(SD_CHIP_FAMILY nrf54lm20)
   set(DEBUG_BOOTLOADER_REGION_START 0x1C8000)
   target_compile_definitions(bootloader PUBLIC NRF54LM20A_XXAA)
@@ -287,6 +290,12 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   )
 else ()
   target_compile_definitions(bootloader PUBLIC DFU_APP_DATA_RESERVED=${DFU_APP_DATA_RESERVED})
+endif ()
+
+# UARTE instance driving serial DFU, set by board.cmake as a SERIALxx suffix.
+# Defaults to 00 in nrf_drv_uart.h when a board does not set it.
+if (DEFINED UART_INSTANCE)
+  target_compile_definitions(bootloader PUBLIC BOOTLOADER_UART_INSTANCE=${UART_INSTANCE})
 endif ()
 
 #----------------------------------

@@ -98,11 +98,16 @@ static inline bool is_sd_existed(void)
  * for header compatibility, so L15 must be the fallback. */
 #if defined(NRF54LM20A_XXAA)
   // nRF54LM20A: RRAM = 2036 KB usable (0x000000-0x1FD000)
+  //
+  // The MBR params and settings pages sit between the bootloader config page
+  // and the SoftDevice base, not at the top of the RRAM window as on the other
+  // nRF54L parts: 0x001FE000/0x001FF000 are past the last usable RRAM address
+  // on this part. Keep in sync with linker/nrf54lm20a{,_debug}.ld.
   #ifndef BOOTLOADER_REGION_START
   #define BOOTLOADER_REGION_START             0x001D0000
   #endif
-  #define BOOTLOADER_MBR_PARAMS_PAGE_ADDRESS  0x001FE000
-  #define BOOTLOADER_SETTINGS_ADDRESS         0x001FF000
+  #define BOOTLOADER_MBR_PARAMS_PAGE_ADDRESS  0x001D8000
+  #define BOOTLOADER_SETTINGS_ADDRESS         0x001D9000
 
 #elif defined(NRF54L05_XXAA)
   // nRF54L05: RRAM = 512 KB

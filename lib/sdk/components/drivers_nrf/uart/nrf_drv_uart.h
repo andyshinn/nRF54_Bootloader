@@ -63,15 +63,34 @@
 #include "nrf_uarte.h"
 #endif
 
+#include "nordic_common.h"
 #include "sdk_errors.h"
 #include "sdk_config.h"
 
-/* nRF54L peripheral instance mapping */
+/* nRF54L peripheral instance mapping
+ *
+ * The bootloader drives exactly one UARTE. Which one is a board property:
+ * BOOTLOADER_UART_INSTANCE carries the SERIALxx suffix (00, 20, 21, ...) and
+ * is passed in by board.cmake / board.mk. SERIAL00 lives in the fast
+ * peripheral domain and only reaches GPIO port P2, so a board whose DFU UART
+ * pins are on P1 has to pick one of the SERIAL2x instances instead. Defaults
+ * to 00, which is what every board used before this was configurable.
+ */
+#ifndef BOOTLOADER_UART_INSTANCE
+#define BOOTLOADER_UART_INSTANCE 00
+#endif
+
+/* Dedicated paste helpers rather than CONCAT_2: NRF_UARTE0 is itself reached
+ * through a CONCAT_2 expansion in NRF_DRV_UART_PERIPHERAL, and a macro cannot
+ * be re-expanded while its own expansion is in progress. */
+#define BOOTLOADER_UART_REG_(n)   NRF_UARTE##n
+#define BOOTLOADER_UART_REG(n)    BOOTLOADER_UART_REG_(n)
+
 #ifndef NRF_UART0
-#define NRF_UART0   NRF_UARTE00
+#define NRF_UART0   BOOTLOADER_UART_REG(BOOTLOADER_UART_INSTANCE)
 #endif
 #ifndef NRF_UARTE0
-#define NRF_UARTE0  NRF_UARTE00
+#define NRF_UARTE0  BOOTLOADER_UART_REG(BOOTLOADER_UART_INSTANCE)
 #endif
 
 #ifdef __cplusplus

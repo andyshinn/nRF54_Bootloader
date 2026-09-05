@@ -28,20 +28,30 @@ Note: nRF54L has no USB peripheral, so there is no UF2 or CDC support.
 
 ## How to use
 
-The bootloader checks two pins on reset:
+On boards that define `BUTTON_DFU` and `BUTTON_DFU_OTA` in `board.h`, the
+bootloader checks those two pins on reset:
 
 - **DFU = LOW**, **FRST = HIGH**: Enter serial DFU mode
 - **DFU = LOW**, **FRST = LOW**: Enter OTA DFU mode (for Nordic nRF Connect/Toolbox)
 - **DFU = HIGH**, **FRST = HIGH**: Boot application if present, otherwise enter DFU
-- **Double Reset** within 500 ms: Enter DFU mode
 
 On the nRF54L15-DK, `DFU` is **Button1** and `FRST` is **Button2**.
+
+These two entries are compiled out on boards that do not define those macros —
+including every XIAO board, which has a single user button and no dedicated DFU
+button. There the only manual entry is:
+
+- **Double Reset** within 500 ms: Enter DFU mode
+
+Double reset is button-independent: it uses the reset pin's `RESETREAS` flag
+plus a magic word kept in no-init RAM across the reset, so it works on any
+board regardless of how many buttons it has.
 
 The application can also trigger DFU via the `GPREGRET` register:
 
 ```c
 void reset_to_dfu(void) {
-    NRF_POWER->GPREGRET = 0x4e; // 0xA8 for OTA
+    NRF_POWER->GPREGRET[0] = 0x4e; // 0xA8 for OTA
     NVIC_SystemReset();
 }
 ```

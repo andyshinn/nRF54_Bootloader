@@ -63,13 +63,23 @@
 #define BUTTON_PULL           NRF_GPIO_PIN_PULLUP
 
 /*------------------------------------------------------------------*/
-/* UART — D6(TX) / D7(RX) on the XIAO connector
+/* UART — serial DFU over the USB connector
  *
- * The XIAO connector maps D6 to P1.08 and D7 to P1.09, which is what
- * Zephyr exposes as xiao_serial (uart21).
+ * The USB port goes to the on-board SAMD11 CMSIS-DAP probe (VID 0x2886,
+ * PID 0x0068), whose CDC bridge lands on P1.11 (nRF TX) / P1.10 (nRF RX).
+ * These are the pins nrfutil reaches when the host talks to the USB port;
+ * the Arduino core calls the same pair Serial2 and describes it as the
+ * board's debug console (PIN_SERIAL2_TX/RX in
+ * variants/xiao_nrf54lm20a/variant.h).
+ *
+ * Do NOT use D6/D7 (P1.08/P1.09) here — that is the core's Serial1 on the
+ * XIAO header, which the USB port cannot reach.
+ *
+ * P1 is unreachable from SERIAL00, so board.cmake / board.mk select UARTE20
+ * via UART_INSTANCE.
  *------------------------------------------------------------------*/
-#define TX_PIN_NUMBER         _PINNUM(1, 8)
-#define RX_PIN_NUMBER         _PINNUM(1, 9)
+#define TX_PIN_NUMBER         _PINNUM(1, 11)
+#define RX_PIN_NUMBER         _PINNUM(1, 10)
 #define CTS_PIN_NUMBER        0xFFFFFFFF
 #define RTS_PIN_NUMBER        0xFFFFFFFF
 

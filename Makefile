@@ -141,7 +141,10 @@ else ifeq ($(MCU_SUB_VARIANT),nrf54l05)
 else ifeq ($(MCU_SUB_VARIANT),nrf54lm20a)
   CFLAGS += -DNRF54LM20A_XXAA
   DFU_DEV_REV = 54120
-  DFU_APP_DATA_RESERVED = 10*4096
+  # 9 pages: 28 KB InternalFS + the 8 KB gap below the bootloader. Matches
+  # FLASH LENGTH 0x1C6000 in the core's nrf54lm20a_s145_v10.ld and
+  # upload.maximum_size in boards/xiao_nrf54lm20a.json.
+  DFU_APP_DATA_RESERVED = 9*4096
   SD_CHIP_FAMILY = nrf54lm20
   DEBUG_BOOTLOADER_REGION_START = 0x1C8000
 else
@@ -370,6 +373,12 @@ ifeq ($(DEBUG), 1)
 endif
 
 CFLAGS += -DDFU_APP_DATA_RESERVED=$(DFU_APP_DATA_RESERVED)
+
+# UARTE instance driving serial DFU, set by board.mk as a SERIALxx suffix.
+# Defaults to 00 in nrf_drv_uart.h when a board does not set it.
+ifdef UART_INSTANCE
+  CFLAGS += -DBOOTLOADER_UART_INSTANCE=$(UART_INSTANCE)
+endif
 
 #------------------------------------------------------------------------------
 # Linker Flags

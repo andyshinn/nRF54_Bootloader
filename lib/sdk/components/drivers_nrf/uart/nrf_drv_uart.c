@@ -101,8 +101,11 @@ typedef struct
 
 static uart_control_block_t m_cb[UART_ENABLED_COUNT];
 
-/* nRF54L IRQ handler mapping */
-#define UART0_IRQHandler  SERIAL00_IRQHandler
+/* nRF54L IRQ handler mapping — follows BOOTLOADER_UART_INSTANCE (see
+ * nrf_drv_uart.h), so the vector we define matches the UARTE we drive. */
+#define BOOTLOADER_UART_IRQ_(n)  SERIAL##n##_IRQHandler
+#define BOOTLOADER_UART_IRQ(n)   BOOTLOADER_UART_IRQ_(n)
+#define UART0_IRQHandler  BOOTLOADER_UART_IRQ(BOOTLOADER_UART_INSTANCE)
 #define IRQ_HANDLER(n) void UART##n##_IRQHandler(void)
 
 __STATIC_INLINE void apply_config(nrf_drv_uart_t const * p_instance, nrf_drv_uart_config_t const * p_config)

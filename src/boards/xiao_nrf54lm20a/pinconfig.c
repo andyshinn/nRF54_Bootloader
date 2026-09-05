@@ -7,7 +7,7 @@ const uint32_t bootloaderConfig[] =
   0x1e9e10f1, 0x20227a79,                       // magic
   3, 100,                                       // used entries, total entries
 
-  204, 0x200000,                                // FLASH_BYTES = 0x200000 (2 MB)
+  204, 0x1FD000,                                // FLASH_BYTES = 0x1FD000 (2036 KB usable RRAM)
   205, 0x80000,                                 // RAM_BYTES = 0x80000 (512 KB)
   210, 0x20,                                    // PINS_PORT_SIZE = PA_32
 

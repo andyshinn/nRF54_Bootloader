@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.2.1 — 2026-09-05
+
+**Fixed:** the XIAO nRF54LM20A serial DFU UART was on the wrong pins and the
+wrong peripheral, so `nrfutil` over the USB port could never reach it. The
+board's USB connector goes to an on-board SAMD11 CMSIS-DAP probe (VID 0x2886,
+PID 0x0068) whose CDC bridge lands on P1.11 (TX) / P1.10 (RX); the board was
+configured for P1.08/P1.09, the D6/D7 header pins, which the USB port does not
+reach.
+
+**Fixed:** the DFU UART peripheral is now selectable per board. It was
+hardcoded to `UARTE00` (`SERIAL00`), which is in the fast peripheral domain and
+only reaches GPIO port P2 — and on the XIAO nRF54LM20A every P2 pin belongs to
+the external SPI flash, so no P1 pin assignment could have worked. Boards now
+set `UART_INSTANCE` in `board.cmake` / `board.mk`; `xiao_nrf54lm20a` selects
+`UARTE20`. Boards that do not set it keep `SERIAL00`, so no other board
+changes behaviour.
+
+**Fixed:** the nRF54LM20A MBR params and bootloader settings pages were at
+`0x1FE000` and `0x1FF000`, both past the last usable RRAM address on this part
+(`NRF_MEMORY_FLASH_SIZE = 0x1FD000`; the SVD says "2036 KByte RRAM"). Since
+`bootloader_app_is_valid()` reads `bank_0` out of the settings page, a page
+that is not physically backed would leave the application permanently invalid
+and the board stuck in DFU. They now sit at `0x1D8000` and `0x1D9000`, in the
+free page-aligned slots between the bootloader config page and the SoftDevice
+base. **Consumers must update `bootloader.settings_addr` to `0x1D9000` in
+`boards/xiao_nrf54lm20a.json`.**
+
+**Fixed:** `DFU_APP_DATA_RESERVED` for nRF54LM20A was 10 pages (40 KB), which
+put the maximum DFU application image at `0x1C5000` while the Arduino core's
+`nrf54lm20a_s145_v10.ld` and `upload.maximum_size` both allow `0x1C6000`. An
+application in that last 4 KB would have been rejected by the size check. It is
+now 9 pages (36 KB) — 28 KB InternalFS plus the 8 KB gap below the bootloader —
+so the bootloader, the core's linker script and the platform's board JSON agree
+exactly on a `0x1000`–`0x1C7000` application region.
+
+**Fixed:** the `xiao_nrf54lm20a` CF2 config block advertised
+`FLASH_BYTES = 0x200000`; the part has `0x1FD000` of usable RRAM.
+
+**Docs:** the README described DFU entry as if every board had two buttons. The
+`BUTTON_DFU` / `BUTTON_DFU_OTA` entries are compiled out on boards that do not
+define them (all XIAO boards), where double-reset and `GPREGRET` are the only
+entry paths. Also corrected `NRF_POWER->GPREGRET` to `GPREGRET[0]`.
+
 ## 0.2.0 — 2026-09-05
 
 **Added:** nRF54LM20A support (Cortex-M33 @128 MHz, 2 MB RRAM, 512 KB RAM) and

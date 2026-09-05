@@ -11,21 +11,32 @@
  *
  * RRAM layout (bottom to top):
  *   0x00000000 - 0x00000FFF : MBR (4 KB)
- *   0x00001000 - 0x001C5FFF : Application code
- *   0x001C6000 - 0x001CFFFF : DFU app data reserved (40 KB = 10*4096)
+ *   0x00001000 - 0x001C6FFF : Application code
+ *   0x001C7000 - 0x001CFFFF : DFU app data reserved (36 KB = 9*4096)
+ *                             (28 KB InternalFS 0x1C7000-0x1CDFFF + 8 KB gap)
  *   0x001D0000 - 0x001D7BFF : Bootloader (31 KB)
  *   0x001D7C00 - 0x001D7FFF : Bootloader config (1 KB)
- *   ... gap 0x001D8000 - 0x001DA7FF ...
+ *   0x001D8000 - 0x001D8FFF : MBR params page
+ *   0x001D9000 - 0x001D9FFF : Bootloader settings page
+ *   ... gap 0x001DA000 - 0x001DA7FF ...
  *   0x001DA800 - 0x001FCBFF : SoftDevice S145
- *   0x001FE000 - 0x001FEFFF : MBR params page
- *   0x001FF000 - 0x001FFFFF : Bootloader settings page
+ *   0x001FCC00 - 0x001FCFFF : unused tail of the last RRAM page
  *
  * Note: The bootloader is placed BELOW the SoftDevice in RRAM.
  *
- * The MBR params and bootloader settings pages mirror the addresses used by
- * the nRF54L05/L10/L15 scripts (top of the nominal RRAM window). As on those
- * parts, they fall above the last usable RRAM address (0x001FD000 here); this
- * is a pre-existing property of the family layout, not specific to LM20A.
+ * The MBR params and bootloader settings pages deliberately do NOT mirror the
+ * nRF54L05/L10/L15 scripts, which put them at the top of the nominal RRAM
+ * window. On this part that would be 0x001FE000/0x001FF000, both past the last
+ * usable RRAM address: the MDK gives NRF_MEMORY_FLASH_SIZE = 0x001FD000
+ * (nrf54lm20a_xxaa_application_memory.h) and the SVD says "2036 KByte RRAM".
+ * bootloader_app_is_valid() reads bank_0 out of the settings page, so a page
+ * that is not physically backed would leave the app permanently invalid and
+ * the board stuck in DFU. They are placed instead in the two free, page
+ * aligned slots between the bootloader config page and the SoftDevice base.
+ *
+ * Keep in sync with BOOTLOADER_MBR_PARAMS_PAGE_ADDRESS and
+ * BOOTLOADER_SETTINGS_ADDRESS in sdk11 dfu_types.h, and with
+ * bootloader.settings_addr in the platform's boards/xiao_nrf54lm20a.json.
  */
 
 SEARCH_DIR(.)
@@ -39,10 +50,10 @@ MEMORY
   BOOTLOADER_CONFIG (r): ORIGIN = 0x1D7C00, LENGTH = 0x400 /* 1 KB */
 
   /** Location of mbr params page in flash. */
-  MBR_PARAMS_PAGE (rw) : ORIGIN = 0x1FE000, LENGTH = 0x1000
+  MBR_PARAMS_PAGE (rw) : ORIGIN = 0x1D8000, LENGTH = 0x1000
 
   /** Location of bootloader setting in flash. */
-  BOOTLOADER_SETTINGS (rw) : ORIGIN = 0x1FF000, LENGTH = 0x1000
+  BOOTLOADER_SETTINGS (rw) : ORIGIN = 0x1D9000, LENGTH = 0x1000
 
   /** RAM Region for bootloader. nRF54LM20A has 512 KB RAM.
    *  SoftDevice S145 v10.0.1 reserves 0x4780; we start at 0x4800 to keep the

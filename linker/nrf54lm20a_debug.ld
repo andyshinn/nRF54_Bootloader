@@ -16,11 +16,12 @@ MEMORY
 
   BOOTLOADER_CONFIG (r): ORIGIN = 0x1D7C00, LENGTH = 0x400 /* 1 KB */
 
-  /** Location of mbr params page in flash. */
-  MBR_PARAMS_PAGE (rw) : ORIGIN = 0x1FE000, LENGTH = 0x1000
+  /** Location of mbr params page in flash. See nrf54lm20a.ld for why these
+   *  are not at the top of the RRAM window like the nRF54L05/L10/L15 scripts. */
+  MBR_PARAMS_PAGE (rw) : ORIGIN = 0x1D8000, LENGTH = 0x1000
 
   /** Location of bootloader setting in flash. */
-  BOOTLOADER_SETTINGS (rw) : ORIGIN = 0x1FF000, LENGTH = 0x1000
+  BOOTLOADER_SETTINGS (rw) : ORIGIN = 0x1D9000, LENGTH = 0x1000
 
   /** RAM Region for bootloader. nRF54LM20A has 512 KB RAM. */
   RAM (rwx) :  ORIGIN = 0x20004800, LENGTH = 0x20080000-0x20004800
