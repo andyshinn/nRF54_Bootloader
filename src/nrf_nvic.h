@@ -1,6 +1,11 @@
 /*
  * S145 compatibility shim for nrf_nvic.h
  *
+ * Lives in src/ (not in the vendored SoftDevice tree) because it is part of
+ * this port rather than of any SoftDevice release, and because no S145
+ * version ships an nrf_nvic.h — S145 v9.0.0 did not, and v10.0.1 does not.
+ * src/ precedes the SoftDevice API directory on the include path.
+ *
  * The S145 SoftDevice (nRF54L) does not provide sd_nvic_* wrappers.
  * On nRF54L the application can use CMSIS NVIC functions directly,
  * even when the SoftDevice is enabled, as the interrupt isolation
