@@ -12,11 +12,19 @@ include(${CMAKE_CURRENT_LIST_DIR}/src/boards/${BOARD}/board.cmake)
 # nRF54L only: Cortex-M33
 set(CMAKE_SYSTEM_PROCESSOR cortex-m33 CACHE INTERNAL "System Processor")
 
-# MCU_VARIANT is set by board.cmake (nrf54l15, nrf54l10, or nrf54l05)
+# MCU_VARIANT is set by board.cmake (nrf54l15, nrf54l10, nrf54l05 or nrf54lm20a)
 if (NOT DEFINED MCU_VARIANT)
   set(MCU_VARIANT nrf54l15)
 endif ()
 set(JLINK_DEVICE ${MCU_VARIANT}_xxaa)
+
+# Startup file: the vector table layout differs between the nRF54L and
+# nRF54LM parts, so LM20A must use its own. L10/L05 share the L15 table.
+if (MCU_VARIANT STREQUAL "nrf54lm20a")
+  set(MCU_STARTUP_VARIANT nrf54lm20a)
+else ()
+  set(MCU_STARTUP_VARIANT nrf54l15)
+endif ()
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/toolchain/arm_gcc.cmake)
 
@@ -39,7 +47,10 @@ if (NOT DEFINED CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
   set(CMAKE_BUILD_TYPE MinSizeRel CACHE STRING "Build type" FORCE)
 endif ()
 
-# SoftDevice S145 for nRF54L
+# SoftDevice S145 for nRF54L.
+# Default is v9.0.0; a board.cmake may override SD_VERSION (and the MCU block
+# below sets SD_CHIP_FAMILY) — nRF54LM20A needs v10.0.1, which is the first
+# S145 release with an nRF54LM20A build.
 if(NOT DEFINED SD_VERSION)
   set(SD_VERSION 9.0.0)
 endif ()
@@ -82,7 +93,7 @@ add_executable(bootloader
   ${SDK_DIR}/drivers_nrf/uart/nrf_drv_uart.c
   ${SDK_DIR}/drivers_nrf/common/nrf_drv_common.c
   # startup (canonical nrfx 4.x startup)
-  ${NRFX_DIR}/bsp/stable/mdk/gcc_startup_nrf54l15_application.S
+  ${NRFX_DIR}/bsp/stable/mdk/gcc_startup_${MCU_STARTUP_VARIANT}_application.S
   )
 
 if (DUALBANK_FW)
@@ -212,18 +223,38 @@ if (TRACE_ETM STREQUAL "1")
 endif ()
 
 # nRF54L MCU variant selection
+#
+# SD_CHIP_FAMILY selects the vendored SoftDevice directory (together with
+# SD_VERSION); DEBUG_BOOTLOADER_REGION_START must track the FLASH origin of the
+# matching linker/<variant>_debug.ld.
+#
+# Note NRF54LM20A_XXAA is defined on its own: nrf.h tests NRF54L15_XXAA before
+# NRF54LM20A_XXAA, so pairing them would select the wrong device header. The
+# L10/L05 pairing is deliberate and stays as-is.
 if (MCU_VARIANT STREQUAL "nrf54l15")
   set(DFU_DEV_REV 54115)
   set(DFU_APP_DATA_RESERVED 10*4096)
+  set(SD_CHIP_FAMILY nrf54l)
+  set(DEBUG_BOOTLOADER_REGION_START 0x148000)
   target_compile_definitions(bootloader PUBLIC NRF54L15_XXAA)
 elseif (MCU_VARIANT STREQUAL "nrf54l10")
   set(DFU_DEV_REV 54110)
   set(DFU_APP_DATA_RESERVED 2*4096)
+  set(SD_CHIP_FAMILY nrf54l)
+  set(DEBUG_BOOTLOADER_REGION_START 0x0C8000)
   target_compile_definitions(bootloader PUBLIC NRF54L10_XXAA NRF54L15_XXAA)
 elseif (MCU_VARIANT STREQUAL "nrf54l05")
   set(DFU_DEV_REV 54105)
   set(DFU_APP_DATA_RESERVED 2*4096)
+  set(SD_CHIP_FAMILY nrf54l)
+  set(DEBUG_BOOTLOADER_REGION_START 0x048000)
   target_compile_definitions(bootloader PUBLIC NRF54L05_XXAA NRF54L15_XXAA)
+elseif (MCU_VARIANT STREQUAL "nrf54lm20a")
+  set(DFU_DEV_REV 54120)
+  set(DFU_APP_DATA_RESERVED 10*4096)
+  set(SD_CHIP_FAMILY nrf54lm20)
+  set(DEBUG_BOOTLOADER_REGION_START 0x1C8000)
+  target_compile_definitions(bootloader PUBLIC NRF54LM20A_XXAA)
 else ()
   message(FATAL_ERROR "Unknown MCU_VARIANT: ${MCU_VARIANT}")
 endif ()
@@ -235,7 +266,7 @@ endif ()
 string(TOUPPER ${SD_NAME} SD_NAME_UPPER)
 target_compile_definitions(bootloader PUBLIC ${SD_NAME_UPPER})
 
-set(SD_CHIP_FAMILY nrf54l)
+# SD_CHIP_FAMILY is set per MCU variant above.
 set(SD_FILENAME ${SD_NAME}_${SD_CHIP_FAMILY}_${SD_VERSION})
 set(SD_HEX ${SOFTDEVICE_DIR}/${SD_FILENAME}/${SD_FILENAME}_softdevice.hex)
 
@@ -252,7 +283,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     CFG_DEBUG
     SEGGER_RTT_MODE_DEFAULT=SEGGER_RTT_MODE_BLOCK_IF_FIFO_FULL
     DFU_APP_DATA_RESERVED=0
-    BOOTLOADER_REGION_START=0x16A000
+    BOOTLOADER_REGION_START=${DEBUG_BOOTLOADER_REGION_START}
   )
 else ()
   target_compile_definitions(bootloader PUBLIC DFU_APP_DATA_RESERVED=${DFU_APP_DATA_RESERVED})

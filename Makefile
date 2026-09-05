@@ -3,7 +3,7 @@
 # - SDK_PATH     : path to SDK directory
 #
 # - SD_NAME            : e.g s145
-# - SD_VERSION         : SoftDevice version e.g 9.0.0
+# - SD_VERSION         : SoftDevice version e.g 10.0.1
 # - SD_HEX             : to bootloader hex binary
 # - SIGNED_FW          : if bootloader will ONLY accept signed firmware
 # - SIGNED_FW_QX       : Qx for signed firmware verification
@@ -26,13 +26,13 @@ TCRYPT_PATH  = lib/tinycrypt/lib
 NRFX_PATH    = lib/nrfx
 SD_PATH      = lib/softdevice/$(SD_FILENAME)
 
-# SD_VERSION can be overwritten by board.mk
+# SD_VERSION can be overwritten by board.mk (nRF54LM20A needs v10.0.1, the
+# first S145 release with an nRF54LM20A build).
 ifndef SD_VERSION
 	SD_VERSION = 9.0.0
 endif
 
-# nRF54L only
-SD_CHIP_FAMILY = nrf54l
+# SD_CHIP_FAMILY is set per MCU variant below.
 SD_NAME = s145
 
 SD_FILENAME  = $(SD_NAME)_$(SD_CHIP_FAMILY)_$(SD_VERSION)
@@ -45,7 +45,7 @@ else
 	NULL_DEVICE = /dev/null
 endif
 
-# MCU variant from board.mk (nrf54l15, nrf54l10, or nrf54l05)
+# MCU variant from board.mk (nrf54l15, nrf54l10, nrf54l05 or nrf54lm20a)
 ifndef MCU_SUB_VARIANT
   MCU_SUB_VARIANT = nrf54l15
 endif
@@ -112,20 +112,49 @@ BUILD = _build/build-$(BOARD)
 BIN = _bin/$(BOARD)
 
 # nRF54L MCU variant selection
+#
+# SD_CHIP_FAMILY selects the vendored SoftDevice directory (together with
+# SD_VERSION); DEBUG_BOOTLOADER_REGION_START must track the FLASH origin of the
+# matching linker/$(MCU_SUB_VARIANT)_debug.ld.
+#
+# Note -DNRF54LM20A_XXAA is passed on its own: nrf.h tests NRF54L15_XXAA before
+# NRF54LM20A_XXAA, so pairing them would select the wrong device header. The
+# L10/L05 pairing is deliberate and stays as-is.
 ifeq ($(MCU_SUB_VARIANT),nrf54l15)
   CFLAGS += -DNRF54L15_XXAA
   DFU_DEV_REV = 54115
   DFU_APP_DATA_RESERVED = 10*4096
+  SD_CHIP_FAMILY = nrf54l
+  DEBUG_BOOTLOADER_REGION_START = 0x148000
 else ifeq ($(MCU_SUB_VARIANT),nrf54l10)
   CFLAGS += -DNRF54L10_XXAA -DNRF54L15_XXAA
   DFU_DEV_REV = 54110
   DFU_APP_DATA_RESERVED = 2*4096
+  SD_CHIP_FAMILY = nrf54l
+  DEBUG_BOOTLOADER_REGION_START = 0x0C8000
 else ifeq ($(MCU_SUB_VARIANT),nrf54l05)
   CFLAGS += -DNRF54L05_XXAA -DNRF54L15_XXAA
   DFU_DEV_REV = 54105
   DFU_APP_DATA_RESERVED = 2*4096
+  SD_CHIP_FAMILY = nrf54l
+  DEBUG_BOOTLOADER_REGION_START = 0x048000
+else ifeq ($(MCU_SUB_VARIANT),nrf54lm20a)
+  CFLAGS += -DNRF54LM20A_XXAA
+  DFU_DEV_REV = 54120
+  DFU_APP_DATA_RESERVED = 10*4096
+  SD_CHIP_FAMILY = nrf54lm20
+  DEBUG_BOOTLOADER_REGION_START = 0x1C8000
 else
   $(error Unknown MCU_SUB_VARIANT: $(MCU_SUB_VARIANT))
+endif
+
+
+# Startup file: the vector table layout differs between the nRF54L and nRF54LM
+# parts, so LM20A must use its own. L10/L05 share the L15 table.
+ifeq ($(MCU_SUB_VARIANT),nrf54lm20a)
+  MCU_STARTUP_VARIANT = nrf54lm20a
+else
+  MCU_STARTUP_VARIANT = nrf54l15
 endif
 
 SD_NAME_UPPER = $(subst s,S,${SD_NAME})
@@ -203,7 +232,7 @@ C_SRC += $(SDK_PATH)/drivers_nrf/common/nrf_drv_common.c
 #------------------------------------------------------------------------------
 # Assembly Files
 #------------------------------------------------------------------------------
-ASM_SRC = $(NRFX_PATH)/bsp/stable/mdk/gcc_startup_nrf54l15_application.S
+ASM_SRC = $(NRFX_PATH)/bsp/stable/mdk/gcc_startup_$(MCU_STARTUP_VARIANT)_application.S
 
 #------------------------------------------------------------------------------
 # INCLUDE PATH
@@ -337,7 +366,7 @@ ifeq ($(DEBUG), 1)
   IPATH += $(RTT_SRC)/RTT
   C_SRC += $(RTT_SRC)/RTT/SEGGER_RTT.c
   DFU_APP_DATA_RESERVED = 0
-  CFLAGS += -DBOOTLOADER_REGION_START=0x16A000
+  CFLAGS += -DBOOTLOADER_REGION_START=$(DEBUG_BOOTLOADER_REGION_START)
 endif
 
 CFLAGS += -DDFU_APP_DATA_RESERVED=$(DFU_APP_DATA_RESERVED)

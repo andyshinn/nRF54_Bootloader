@@ -91,9 +91,20 @@ static inline bool is_sd_existed(void)
 #define SOFTDEVICE_REGION_START             MBR_SIZE                    /**< This field should correspond to start address of the bootloader, found in UICR.RESERVED, 0x10001014, register. This value is used for sanity check, so the bootloader will fail immediately if this value differs from runtime value. The value is used to determine max application size for updating. */
 #define CODE_PAGE_SIZE                      0x1000                      /**< Size of a flash codepage. Used for size of the reserved flash space in the bootloader region. Will be runtime checked against NRF_UICR->CODEPAGESIZE to ensure the region is correct. */
 
-/* Check smaller variants first — L10/L05 also define NRF54L15_XXAA
+/* nRF54LM20A must be checked first: unlike L10/L05 it does NOT also define
+ * NRF54L15_XXAA, because nrf.h tests NRF54L15_XXAA before NRF54LM20A_XXAA and
+ * defining both would select the wrong device header.
+ * Then check the smaller L variants — L10/L05 also define NRF54L15_XXAA
  * for header compatibility, so L15 must be the fallback. */
-#if defined(NRF54L05_XXAA)
+#if defined(NRF54LM20A_XXAA)
+  // nRF54LM20A: RRAM = 2036 KB usable (0x000000-0x1FD000)
+  #ifndef BOOTLOADER_REGION_START
+  #define BOOTLOADER_REGION_START             0x001D0000
+  #endif
+  #define BOOTLOADER_MBR_PARAMS_PAGE_ADDRESS  0x001FE000
+  #define BOOTLOADER_SETTINGS_ADDRESS         0x001FF000
+
+#elif defined(NRF54L05_XXAA)
   // nRF54L05: RRAM = 512 KB
   #ifndef BOOTLOADER_REGION_START
   #define BOOTLOADER_REGION_START             0x00050000

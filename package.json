@@ -1,6 +1,6 @@
 {
   "name": "framework-arduinoadafruitnrf54-bootloader",
-  "description": "DFU bootloader for the Adafruit-style Arduino core targeting Nordic nRF54L series (nRF54L05, nRF54L10, nRF54L15) with SoftDevice S145.",
+  "description": "DFU bootloader for the Adafruit-style Arduino core targeting Nordic nRF54L series (nRF54L05, nRF54L10, nRF54L15) and nRF54LM20A with SoftDevice S145.",
   "keywords": [
     "framework",
     "bootloader",
@@ -10,7 +10,8 @@
     "ARM",
     "Cortex-M",
     "Nordic Semiconductor",
-    "nRF54L"
+    "nRF54L",
+    "nRF54LM20A"
   ],
   "system": "*",
   "url": "https://github.com/caveman99/nRF54_Bootloader",
