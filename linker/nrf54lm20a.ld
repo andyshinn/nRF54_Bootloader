@@ -45,6 +45,11 @@ GROUP(-lgcc -lc -lnosys)
 
 MEMORY
 {
+  /** Reset-vector stub. nRF54L has no MBR, so nothing would occupy address 0
+   *  and the core would lock up at reset. This sits in the 4 KB page already
+   *  reserved below the application, so it costs no usable flash. */
+  BOOT_STUB (rx) : ORIGIN = 0x0, LENGTH = 0x100
+
   /* Bootloader code: 31 KB below the bootloader config page */
   FLASH (rx) : ORIGIN = 0x1D0000, LENGTH = 0x7C00 /* 31 KB code + 1 KB padding */
 
@@ -69,22 +74,25 @@ MEMORY
   /** Location of non initialized RAM. Non initialized RAM is used for exchanging bond information
    *  from application to bootloader when using buttonless DFU OTA. */
   NOINIT (rwx) :  ORIGIN = 0x200047FC, LENGTH = 0x04
-
-  /** Location in UICR where bootloader start address is stored. */
-  UICR_BOOTLOADER (r) : ORIGIN = 0x10001014, LENGTH = 0x04
-
-  /** Location in UICR where mbr params page address is stored. */
-  UICR_MBR_PARAM_PAGE(r) : ORIGIN = 0x10001018, LENGTH = 0x04
 }
 
 SECTIONS
 {
+  /* Base of the bootloader's own vector table, for src/boot_stub.S. */
+  __bootloader_vectors = ORIGIN(FLASH);
+
   .fs_data_out ALIGN(4):
   {
     PROVIDE( __start_fs_data = .);
     KEEP(*(fs_data))
     PROVIDE( __stop_fs_data = .);
   } = 0
+
+  /* Reset vector + trampoline at address 0 (see src/boot_stub.S). */
+  .boot_stub :
+  {
+    KEEP(*(.boot_stub))
+  } > BOOT_STUB
 
   .bootloaderConfig :
   {
@@ -97,11 +105,6 @@ SECTIONS
 
   } > BOOTLOADER_SETTINGS
 
-  /* Write the bootloader address in UICR. */
-  .uicrBootStartAddress :
-  {
-    KEEP(*(.uicrBootStartAddress))
-  } > UICR_BOOTLOADER
 
   /* Place the mbr params page in flash. */
     .mbrParamsPage(NOLOAD) :
@@ -109,11 +112,6 @@ SECTIONS
 
   } > MBR_PARAMS_PAGE
 
-  /* Write the bootloader address in UICR. */
-  .uicrMbrParamsPageAddress :
-  {
-    KEEP(*(.uicrMbrParamsPageAddress))
-  } > UICR_MBR_PARAM_PAGE
 
   .dbl_reset(NOLOAD) :
   {

@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.2.3 — 2026-09-06
+
+**Fixed:** nothing occupied address 0, so a board flashed with only this
+bootloader locked up at reset and never ran. nRF54L has no MBR: Nordic's model
+puts the reset-vector owner at 0x00000000 (in sdk-nrf-bm the application is
+slot0 there) and the SoftDevice at the top of RRAM. This port inherited the
+nRF52 layout, where an MBR at 0 reads UICR.BOOTLOADERADDR and forwards to the
+bootloader — but nRF54L has neither that MBR nor a UICR.BOOTLOADERADDR field,
+so the core fetched SP and PC of 0xFFFFFFFF at reset and locked up with
+DHCSR.S_LOCKUP set.
+
+`src/boot_stub.S` now provides a reset vector at 0, inside the 4 KB page
+already reserved below the application, so it costs no usable flash. It points
+VTOR at the bootloader's vector table before jumping — needed because
+check_dfu_mode() enables interrupts well before ble_stack_init() sets VTOR, so
+a bare SP/PC pair survives reset but dies on the first interrupt. SP and entry
+are read from the bootloader's vector table at runtime and its base comes from
+the linker as `__bootloader_vectors`, so the stub stays correct across
+bootloader DFU updates and across the release and debug layouts.
+
+**Fixed:** dropped the `.uicrBootStartAddress` and `.uicrMbrParamsPageAddress`
+sections for nRF54LM20A. They target 0x10001014/0x10001018, which is the nRF52
+UICR; on nRF54LM20A the UICR is at 0x00FFD000 and those addresses are not
+mapped at all. Emitting them put a segment in the hex at an address the part
+does not have, which flashers reject or silently skip.
+
+Verified on a XIAO nRF54LM20A: flashing the bootloader hex plus the SoftDevice,
+with no hand-editing, resets into VTOR=0x001D0000, no lockup, UARTE20 live on
+P1.11/P1.10, and the bootloader waiting in bootloader_dfu_start() for a serial
+DFU host.
+
+Only nRF54LM20A is affected. nRF54L05/L10/L15 keep the nRF52-style layout and
+are unchanged; they have the same address-0 gap, which is not addressed here.
+
 ## 0.2.2 — 2026-09-06
 
 **Fixed:** the nRF54LM20A RAM region ended at 0x20080000, but the top of that

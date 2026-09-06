@@ -11,6 +11,9 @@ GROUP(-lgcc -lc -lnosys)
 
 MEMORY
 {
+  /** Reset-vector stub — see nrf54lm20a.ld. */
+  BOOT_STUB (rx) : ORIGIN = 0x0, LENGTH = 0x100
+
   /* Debug bootloader: 63 KB below the bootloader config page */
   FLASH (rx) : ORIGIN = 0x1C8000, LENGTH = 0x00FC00 /* ~63 KB code + 1 KB padding */
 
@@ -33,21 +36,25 @@ MEMORY
   /** Location of non initialized RAM. */
   NOINIT (rwx) :  ORIGIN = 0x200047FC, LENGTH = 0x04
 
-  /** Location in UICR where bootloader start address is stored. */
-  UICR_BOOTLOADER (r) : ORIGIN = 0x10001014, LENGTH = 0x04
 
-  /** Location in UICR where mbr params page address is stored. */
-  UICR_MBR_PARAM_PAGE(r) : ORIGIN = 0x10001018, LENGTH = 0x04
 }
 
 SECTIONS
 {
+  /* Base of the bootloader's own vector table, for src/boot_stub.S. */
+  __bootloader_vectors = ORIGIN(FLASH);
+
   .fs_data_out ALIGN(4):
   {
     PROVIDE( __start_fs_data = .);
     KEEP(*(fs_data))
     PROVIDE( __stop_fs_data = .);
   } = 0
+
+  .boot_stub :
+  {
+    KEEP(*(.boot_stub))
+  } > BOOT_STUB
 
   .bootloaderConfig :
   {
@@ -59,20 +66,12 @@ SECTIONS
 
   } > BOOTLOADER_SETTINGS
 
-  .uicrBootStartAddress :
-  {
-    KEEP(*(.uicrBootStartAddress))
-  } > UICR_BOOTLOADER
 
   .mbrParamsPage(NOLOAD) :
   {
 
   } > MBR_PARAMS_PAGE
 
-  .uicrMbrParamsPageAddress :
-  {
-    KEEP(*(.uicrMbrParamsPageAddress))
-  } > UICR_MBR_PARAM_PAGE
 
   .dbl_reset(NOLOAD) :
   {
