@@ -2,7 +2,8 @@
  *
  * nRF54LM20A memory map:
  *   RRAM: 2036 KB usable (0x00000000 - 0x001FD000)
- *   RAM:  512 KB          (0x20000000 - 0x2007FFFF, RAM + RAM2 contiguous)
+ *   RAM:  512 KB nominal (0x20000000 - 0x2007FFFF, RAM + RAM2 contiguous),
+ *         but the top is NOT usable — see the RAM region below.
  *
  * SoftDevice S145 v10.0.1 placement (s145_nrf54lm20_10.0.1_softdevice.hex):
  *   S145 sits at TOP of RRAM: base address 0x001DA800
@@ -55,10 +56,12 @@ MEMORY
   /** Location of bootloader setting in flash. */
   BOOTLOADER_SETTINGS (rw) : ORIGIN = 0x1D9000, LENGTH = 0x1000
 
-  /** RAM Region for bootloader. nRF54LM20A has 512 KB RAM.
-   *  SoftDevice S145 v10.0.1 reserves 0x4780; we start at 0x4800 to keep the
-   *  same app RAM base as the rest of the family. */
-  RAM (rwx) :  ORIGIN = 0x20004800, LENGTH = 0x20080000-0x20004800
+  /** RAM Region for bootloader. nRF54LM20A has 512 KB RAM, but the top of it
+   *  is NOT accessible: reads/writes above ~0x2007FE00 fault. Nordic's own
+   *  partitioning (sdk-nrf-bm bm_nrf54lm20dk dts) ends app RAM at 0x2007FCC0,
+   *  so that is used as the limit here. __StackTop is ORIGIN+LENGTH, so an
+   *  over-large LENGTH makes the very first push in SystemInit HardFault. */
+  RAM (rwx) :  ORIGIN = 0x20004800, LENGTH = 0x2007FCC0-0x20004800
 
   /* Location for double reset detection, no init */
   DBL_RESET (rwx) :  ORIGIN = 0x200047F8, LENGTH = 0x04

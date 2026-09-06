@@ -23,8 +23,9 @@ MEMORY
   /** Location of bootloader setting in flash. */
   BOOTLOADER_SETTINGS (rw) : ORIGIN = 0x1D9000, LENGTH = 0x1000
 
-  /** RAM Region for bootloader. nRF54LM20A has 512 KB RAM. */
-  RAM (rwx) :  ORIGIN = 0x20004800, LENGTH = 0x20080000-0x20004800
+  /** RAM Region for bootloader. Top of RAM is inaccessible; Nordic ends app
+   *  RAM at 0x2007FCC0 (see nrf54lm20a.ld). */
+  RAM (rwx) :  ORIGIN = 0x20004800, LENGTH = 0x2007FCC0-0x20004800
 
   /* Location for double reset detection, no init */
   DBL_RESET (rwx) :  ORIGIN = 0x200047F8, LENGTH = 0x04

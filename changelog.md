@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.2 — 2026-09-06
+
+**Fixed:** the nRF54LM20A RAM region ended at 0x20080000, but the top of that
+range is not accessible on silicon — reads and writes above roughly 0x2007FE00
+fault. `__StackTop` is `ORIGIN(RAM) + LENGTH(RAM)`, so the initial stack
+pointer landed in unusable memory and the very first instruction of
+`SystemInit` (`push {r3, lr}`) took a HardFault before `main()` was ever
+reached. Confirmed on a XIAO nRF54LM20A over SWD: the core sat in lockup with
+`DHCSR.S_LOCKUP` set, and moving the limit to 0x2007FCC0 got execution through
+`SystemInit` into `main()` and on into `bootloader_dfu_start()`.
+
+0x2007FCC0 is the end of `app_ram` in Nordic's own partitioning for this SoC
+(sdk-nrf-bm `bm_nrf54lm20dk_nrf54lm20a_cpuapp_s145_softdevice.dts`). Note the
+flat memory maps disagree with the hardware here: the nrfx MDK linker script,
+pyOCD's target definition and TinyUSB's BSP all declare the full 512 KB. Those
+get away with it by declaring RAM and RAM1 as two separate regions, which puts
+their `__StackTop` at 0x20040000; this script merges them into one region, so
+the unusable top mattered.
+
+Only nRF54LM20A is affected — the nRF54L05/L10/L15 scripts are unchanged.
+
 ## 0.2.1 — 2026-09-05
 
 **Fixed:** the XIAO nRF54LM20A serial DFU UART was on the wrong pins and the
