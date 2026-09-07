@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.2.5 — 2026-09-06
+
+**Fixed:** the SoftDevice could not run at all, because nothing forwarded its
+exceptions to it. nRF52 put an MBR at address 0 that owned the vector table and
+split exceptions between the MBR, the SoftDevice and the application, and the
+SDK11 code this bootloader came from was written against that. nRF54L has no
+MBR. S145 instead publishes a table of handler addresses at its own base
+address and requires whoever owns the vector table to forward the corresponding
+exceptions to it — see `nrf_sd_isr.h`.
+
+The visible symptom was `mbr_init_sd()` on the OTA DFU entry path issuing
+`sd_mbr_command(SD_MBR_COMMAND_INIT_SD)` — an SVC with no MBR behind it, which
+landed in the bootloader's own `SVC_Handler` and hung. But the same gap covered
+every SoftDevice call: `sd_softdevice_enable()` is an SVC too, and it reached
+the DFU SVC handler, which answered `NRF_ERROR_SVC_HANDLER_MISSING` to anything
+it did not recognise. `src/sd_isr_nrf54l.S` now owns `SVC_Handler` and forwards
+SVC numbers 0x10 and above to the SoftDevice (0x00–0x0F stay with the DFU
+handler, per `nrf_svc.h`), along with SWI00, AAR00_CCM00, ECB00, TIMER10,
+RADIO_0, GRTC_3 and CLOCK_POWER. SWI01 (`SD_EVT_IRQn`) and SWI02
+(`RADIO_NOTIFICATION_IRQn`) are deliberately not forwarded: the SoftDevice
+raises those for us. `mbr_init_sd()` is gone.
+
+The SoftDevice base address is read out of the SoftDevice hex at configure time
+by `tools/sd_base_addr.py`, so it cannot drift from the blob being shipped:
+0x001DA800 for nRF54LM20A with S145 v10.0.1, 0x00158C00 for the nRF54L family
+with v9.0.0.
+
+The rewritten `SVC_Handler` also picks its stack from EXC_RETURN bit 2 rather
+than comparing LR against 0xFFFFFFFD outright. That compare only recognises one
+of the several EXC_RETURN values Armv8-M can produce, and silently reads the
+wrong stack for the others.
+
+**Fixed:** app_timer was on TIMER20 and SWI00, both of which S145 reserves —
+`nrf_sd_def.h` gives `SD_TIMER2X_INSTANCES_USED = 0x1` (TIMER20) and
+`SD_SWI_USED = 0x7` (SWI00, SWI01, SWI02). SWI00 is the SoftDevice's own
+interrupt and has to be forwarded to it, so the bootloader's timers and its
+radio could not both work. app_timer now uses TIMER21 and SWI03, the only
+members of those groups the SoftDevice leaves alone, and picking a reserved SWI
+is a compile error rather than a silent collision.
+
+**Fixed:** the DFU bond window handed over from the application had its two
+halves in the wrong order. The application writes one 62-byte block — 60 bytes
+of `dfu_ble_peer_data_t` then a `uint16` CRC — but `m_peer_data` and
+`m_peer_data_crc` shared a single `.noinit` section, so their order was
+whatever GCC emitted, and GCC emitted the CRC first. The bootloader then
+checksummed the wrong bytes, failed the check, and fell back to non-bonded
+advertising without reporting anything. They now live in `.noinit.peer_data`
+and `.noinit.peer_data_crc`, ordered by the linker scripts, which also assert
+that the window starts at `ORIGIN(RAM)` and that the CRC sits 60 bytes in. A
+future reordering is a link error.
+
+**Added:** OTA DFU entry checks that a SoftDevice is actually programmed before
+using it, and falls back to serial DFU if not. Every `sd_*` call is an SVC
+forwarded to an address read from the SoftDevice's table; with no SoftDevice
+flashed that table reads as erased and the first call branches to 0xFFFFFFFF.
+Serial DFU is the last way back into a board with no debugger attached, so it
+should not be lost to a fault. The check is bounded against
+`NRF_MEMORY_FLASH_SIZE` first: the only vendored S145 v9.0.0 image is the
+nRF54L15 build, whose base is past the end of RRAM on the nRF54L10 and L05, and
+reading an unmapped RRAM address faults rather than returning 0xFFFFFFFF. Those
+two boards have no SoftDevice that fits and now decline OTA DFU cleanly.
+
 ## 0.2.4 — 2026-09-06
 
 **Fixed:** the bootloader handed the application over with VTOR still pointing

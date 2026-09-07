@@ -138,9 +138,26 @@ SECTIONS
    * the address on its own. */
   .noinit(NOLOAD) :
   {
+    /* The bond window the application hands over across a soft reset. Both
+     * halves are pinned by name and in order: the application writes one
+     * 62-byte block -- 60 bytes of dfu_ble_peer_data_t then a uint16 CRC -- at
+     * its own ORIGIN(RAM), and src/dfu_ble_svc.c's two variables have to land
+     * in exactly that order. A bare *(.noinit) wildcard leaves the order to the
+     * compiler, and GCC emitted the CRC first, so the bootloader checksummed
+     * the wrong bytes and fell back to non-bonded advertising without saying
+     * so. The assertions below make a future reordering a link error. */
+    __bootloader_peer_data = .;
+    KEEP(*(.noinit.peer_data))
+    __bootloader_peer_data_crc = .;
+    KEEP(*(.noinit.peer_data_crc))
     KEEP(*(.noinit .noinit.*))
     KEEP(*(.no_init .no_init.*))
   } > RAM
+
+  ASSERT(__bootloader_peer_data == ORIGIN(RAM),
+         "DFU bond window must start at ORIGIN(RAM)")
+  ASSERT(__bootloader_peer_data_crc - __bootloader_peer_data == 60,
+         "DFU bond CRC must sit 60 bytes into the window, right after the peer data")
 
   /* other placements follow here... */
 }
