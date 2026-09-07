@@ -95,7 +95,6 @@
 #define DFU_DBL_RESET_MAGIC             0x5A1AD5      // SALADS
 #define DFU_DBL_RESET_APP               0x4ee5677e
 #define DFU_DBL_RESET_DELAY             500
-#define DFU_DBL_RESET_MEM               0x200047F8
 
 #define BOOTLOADER_VERSION_REGISTER     NRF_TIMER22->CC[0]
 #define DFU_SERIAL_STARTUP_INTERVAL     1000
@@ -112,7 +111,12 @@
 //--------------------------------------------------------------------+
 //
 //--------------------------------------------------------------------+
-uint32_t* dbl_reset_mem = ((uint32_t*) DFU_DBL_RESET_MEM);
+/* Double-reset detection word. The address comes from ORIGIN(DBL_RESET) in the
+ * board's linker script, which also keeps every output section off it; it used
+ * to be a literal 0x200047F8 here that nothing tied to the region, so the two
+ * could drift apart silently. */
+extern uint32_t __dbl_reset_mem[];
+uint32_t* dbl_reset_mem = __dbl_reset_mem;
 
 // true if ble, false if serial
 bool _ota_dfu = false;

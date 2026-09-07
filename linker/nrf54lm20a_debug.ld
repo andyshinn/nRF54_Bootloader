@@ -33,8 +33,11 @@ MEMORY
   /* Location for double reset detection, no init */
   DBL_RESET (rwx) :  ORIGIN = 0x200047F8, LENGTH = 0x04
 
-  /** Location of non initialized RAM. */
-  NOINIT (rwx) :  ORIGIN = 0x200047FC, LENGTH = 0x04
+  /* There is deliberately no NOINIT region. It used to be declared here as a
+   * 4-byte window at 0x200047FC, which could never hold the ~62 bytes of
+   * .noinit the bootloader actually has, and the .noinit output section that
+   * targeted it had no input wildcard, so the block was silently orphaned.
+   * .noinit is now placed at ORIGIN(RAM) by the SECTIONS command below. */
 
 
 }
@@ -63,25 +66,49 @@ SECTIONS
 
   .bootloaderSettings(NOLOAD) :
   {
-
+    KEEP(*(.bootloaderSettings))
   } > BOOTLOADER_SETTINGS
 
 
   .mbrParamsPage(NOLOAD) :
   {
-
+    KEEP(*(.mbrParamsPage))
   } > MBR_PARAMS_PAGE
 
+
+  /* Location for double reset detection, no init. src/main.c reaches the word
+   * through __dbl_reset_mem rather than a literal address, so the two cannot
+   * drift apart. Nothing is placed in DBL_RESET, which is the point: the
+   * region exists so no output section is ever allocated over the word. */
+  __dbl_reset_mem = ORIGIN(DBL_RESET);
 
   .dbl_reset(NOLOAD) :
   {
 
   } > DBL_RESET
 
+  /* Non initialized RAM section in bootloader. Used for bond information
+   * exchange with the application across a soft reset.
+   *
+   * This has to be captured here, in the first SECTIONS command, so that it
+   * lands at ORIGIN(RAM) and its address is fixed. The MDK's nrf_common.ld
+   * (which is what the INCLUDE below resolves to) has its own generic .noinit
+   * rule that would otherwise take these inputs and stack them on top of
+   * .data, where the address moves with every build. Without any wildcard at
+   * all -- as this section used to be -- the inputs were orphaned and ld chose
+   * the address on its own. */
   .noinit(NOLOAD) :
   {
-
-  } > NOINIT
+    KEEP(*(.noinit .noinit.*))
+    KEEP(*(.no_init .no_init.*))
+  } > RAM
 }
 
+/* Resolves to lib/nrfx/bsp/stable/mdk/nrf_common.ld, which is on the link line
+ * as -L<nrfx>/bsp/stable/mdk. That is deliberate: the MDK startup code defines
+ * __data_start / __sdata_start / __tbss_start / __fast_load_start and friends,
+ * and only the MDK script provides them. This repo used to also ship a
+ * linker/nrf_common.ld; it defined none of those symbols, so if the INCLUDE
+ * search order had ever preferred it the link would have failed outright. It
+ * has been removed so the name can only resolve one way. */
 INCLUDE "nrf_common.ld"

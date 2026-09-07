@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.2.4 — 2026-09-06
+
+**Fixed:** `INCLUDE "nrf_common.ld"` in every board linker script resolved to
+`lib/nrfx/bsp/stable/mdk/nrf_common.ld`, not to the `linker/nrf_common.ld` this
+repo shipped — the MDK directory is on the link line as
+`-L<nrfx>/bsp/stable/mdk`, and that copy won the INCLUDE search. That was the
+only outcome that could ever work: the MDK startup code references
+`__data_start`, `__sdata_start`, `__tdata_load_start`, `__fast_start`,
+`__tbss_start__` and `__sbss_start__`, and only the MDK script defines them.
+Forcing the include to `linker/nrf_common.ld` fails the link with sixteen
+undefined references. So the repo's copy was dead code that nothing could use
+and that ld might have picked up on a different binutils, in a different
+working directory, or with `-L` reordered. It has been deleted so the name can
+only resolve one way, and each INCLUDE site now says where it points.
+
+**Fixed:** `.noinit` was placed by ld's orphan handling instead of by the
+linker script. `.noinit(NOLOAD) : { } > NOINIT` had no input wildcard, so the
+`m_peer_data` / `m_peer_data_crc` block that `src/dfu_ble_svc.c` uses to hand
+bond information from the application to the bootloader across a soft reset was
+never assigned to it, and the MDK script's own generic `.noinit` rule took the
+inputs and stacked them on top of `.data`. Its address therefore moved with the
+size of `.data`, which is exactly what a no-init block must not do. The
+sections now carry `KEEP(*(.noinit .noinit.*))` and sit at `ORIGIN(RAM)`, ahead
+of the MDK rule, so the block has a fixed address: `m_peer_data_crc` at
+0x20004800 and `m_peer_data` at 0x20004802 on every board.
+
+The `NOINIT` memory region is gone with it. It declared four bytes at
+0x200047FC, which could never have held the ~62 bytes of `.noinit` the
+bootloader has; forcing the block into it overflows the region by 58 bytes.
+Note the application has to reserve the matching window at its own `ORIGIN(RAM)`
+for the handoff to work end to end — the bootloader side is now deterministic,
+the contract is not yet declared on the core side.
+
+**Fixed:** `.bootloaderSettings` and `.mbrParamsPage` had no input wildcard
+either, so `m_boot_settings` and `m_mbr_params_page` landed on their reserved
+pages only because ld merges an orphan into an identically named output
+section. `m_mbr_params_page` was in fact not being placed at all. Both now use
+`KEEP(*(...))`; `m_boot_settings` is at BOOTLOADER_SETTINGS_ADDRESS and
+`m_mbr_params_page` at BOOTLOADER_MBR_PARAMS_PAGE_ADDRESS for every board.
+
+**Fixed:** `src/main.c` reached the double-reset detection word through a
+literal `0x200047F8` with nothing tying it to `ORIGIN(DBL_RESET)` in the linker
+scripts, so the two could drift apart silently and double-reset DFU entry would
+stop working with no build error. The scripts now export `__dbl_reset_mem` and
+`main.c` uses that. The address is unchanged on every board.
+
+**Removed:** the `release/` hex files from the source tree. They arrived on
+this branch through the v0.2.1 CI release commit and were never refreshed, so a
+`-t bootloader` build from the branch — rather than from a release tag — picked
+up a v0.2.1 image with no reset vector at address 0 and a stack top of
+0x20080000, and flashed a board that could not boot. `AGENTS.md` already says
+only release tags carry `release/`; master never had it. CI recreates the
+directory on a release event.
+
 ## 0.2.3 — 2026-09-06
 
 **Fixed:** nothing occupied address 0, so a board flashed with only this
