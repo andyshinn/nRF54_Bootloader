@@ -2,6 +2,37 @@
 
 ## 0.2.4 — 2026-09-06
 
+**Fixed:** the bootloader handed the application over with VTOR still pointing
+at the bootloader's own vector table, so the first exception the application
+took dispatched into the bootloader. A FreeRTOS application hits this
+immediately: `vTaskStartScheduler` starts the first task with `svc 0`, which
+went to the bootloader's `SVC_Handler` and faulted with MMFSR IACCVIOL.
+
+`bootloader_app_start()` was built on the nRF52 convention where the MBR at
+address 0 owns the real vector table and `SD_MBR_COMMAND_IRQ_FORWARD_ADDRESS_SET`
+tells it where to forward exceptions -- which is why the nRF52 code never
+touched VTOR. nRF54L has no MBR, so that SVC had nothing to reach, and the
+fallback it took when the command failed wrote the forward address to the first
+word of SRAM: 0x20000000, inside the SoftDevice's RAM region on this part, so
+it corrupted SoftDevice state instead. Both are gone; the function now sets
+`SCB->VTOR` to the application's vector table, with a DSB/ISB, before jumping.
+
+**Fixed:** only IRQs 0..31 were disabled before the jump. The second
+`NVIC->ICER`/`ICPR` write was behind `__NRF_NVIC_ISER_COUNT == 2`, a macro that
+comes from the nRF52 SoftDevice headers and is not defined for S145, and
+nRF54LM20A numbers its interrupts up to 289 (VREGUSB). Anything left enabled
+above IRQ 31 fired into an application that had not finished starting. All 16
+Cortex-M33 ICER/ICPR registers are now cleared.
+
+**Fixed:** `is_sd_existed()` looked for `SD_MAGIC_NUMBER` at
+`SOFTDEVICE_INFO_STRUCT_OFFSET + 4` (0x2004), which on nRF54L is inside the
+application image, not a SoftDevice: S145 is linked at the top of RRAM and the
+application always starts at MBR_SIZE. An application that happened to hold the
+magic word at 0x2004 would have made the bootloader take `SD_SIZE_GET(MBR_SIZE)`
+-- another arbitrary application word -- as `CODE_REGION_1_START`, and so as the
+address it validated, erased during DFU, and jumped to. The probe now reports
+what is actually true on this family and `CODE_REGION_1_START` is `MBR_SIZE`.
+
 **Fixed:** `INCLUDE "nrf_common.ld"` in every board linker script resolved to
 `lib/nrfx/bsp/stable/mdk/nrf_common.ld`, not to the `linker/nrf_common.ld` this
 repo shipped — the MDK directory is on the link line as

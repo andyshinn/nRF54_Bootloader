@@ -397,46 +397,46 @@ uint32_t bootloader_dfu_start(bool ota, uint32_t timeout_ms, bool cancel_timeout
 
 void bootloader_app_start(void)
 {
-  // Disable all interrupts
-  NVIC->ICER[0]=0xFFFFFFFF;
-  NVIC->ICPR[0]=0xFFFFFFFF;
-#if defined(__NRF_NVIC_ISER_COUNT) && __NRF_NVIC_ISER_COUNT == 2
-  NVIC->ICER[1]=0xFFFFFFFF;
-  NVIC->ICPR[1]=0xFFFFFFFF;
-#endif
-
-  uint32_t fwd_ret;
-  uint32_t app_addr;
-
-  if ( is_sd_existed() )
+  /* Disable and clear every interrupt before handing over.
+   *
+   * This used to cover ICER[0]/ICPR[0] and, only when __NRF_NVIC_ISER_COUNT
+   * said 2, ICER[1]/ICPR[1]. That macro comes from the nRF52 SoftDevice
+   * headers and is not defined for S145, so on nRF54L only IRQs 0..31 were
+   * being disabled while this part numbers its interrupts up to 289. Anything
+   * still enabled above IRQ 31 fires into an application that has not finished
+   * starting. The Cortex-M33 NVIC has 16 of each register and writes to
+   * unimplemented bits are ignored, so just do all of them. */
+  for ( uint32_t i = 0; i < 16; i++ )
   {
-    PRINTF("SoftDevice exist\r\n");
-    // App starts after SoftDevice
-    app_addr = SD_SIZE_GET(MBR_SIZE);
-    fwd_ret = sd_softdevice_vector_table_base_set(app_addr);
-  }else
-  {
-    PRINTF("SoftDevice not exist\r\n");
-
-    // App starts right after MBR
-    app_addr = MBR_SIZE;
-    sd_mbr_command_t command =
-    {
-      .command = SD_MBR_COMMAND_IRQ_FORWARD_ADDRESS_SET,
-      .params.irq_forward_address_set.address = app_addr,
-    };
-
-    fwd_ret = sd_mbr_command(&command);
+    NVIC->ICER[i] = 0xFFFFFFFFUL;
+    NVIC->ICPR[i] = 0xFFFFFFFFUL;
   }
 
-  // unlikely failed to forward vector table, manually set forward address
-  if ( fwd_ret != NRF_SUCCESS )
-  {
-    PRINT_HEX(fwd_ret);
+  /* On nRF54L the application always starts at MBR_SIZE. There is no MBR, and
+   * the SoftDevice is linked at the top of RRAM rather than at the bottom of
+   * flash as on nRF52, so nothing ever sits between MBR_SIZE and the
+   * application. Low flash holds only the reset-vector stub in
+   * src/boot_stub.S, inside the page MBR_SIZE already reserves. */
+  uint32_t const app_addr = MBR_SIZE;
 
-    // MBR use first 4-bytes of SRAM to store foward address
-    *(uint32_t *)(0x20000000) = app_addr;
-  }
+  /* Install the application's vector table.
+   *
+   * On nRF52 this is the MBR's job: it sits at address 0, owns the real vector
+   * table, and SD_MBR_COMMAND_IRQ_FORWARD_ADDRESS_SET tells it where to forward
+   * exceptions, which is why the nRF52 code left VTOR alone. nRF54L has no MBR,
+   * so that SVC has nothing to reach, and the fallback the nRF52 path took when
+   * it failed -- writing the forward address to the first word of SRAM -- lands
+   * at 0x20000000, inside the SoftDevice's RAM region on this part, corrupting
+   * SoftDevice state instead of doing anything useful.
+   *
+   * src/boot_stub.S pointed VTOR at the bootloader's own table at
+   * BOOTLOADER_REGION_START and nothing has moved it since, so without this the
+   * application runs with the bootloader's handlers installed: the first
+   * exception it takes -- for a FreeRTOS application, the `svc 0` that starts
+   * the scheduler -- dispatches into the bootloader and faults. */
+  SCB->VTOR = app_addr;
+  __DSB();
+  __ISB();
 
   // jump to app
   bootloader_util_app_start(app_addr);
