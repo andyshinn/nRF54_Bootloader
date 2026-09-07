@@ -124,20 +124,35 @@ bool _ota_connected = false;
 bool _ota_was_connected = false;
 bool _sd_inited = false;
 
+/* Whether S145 is actually programmed where this build was told it lives.
+ *
+ * Worth asking before any sd_* call, because every one of them is an SVC that
+ * src/sd_isr_nrf54l.S forwards to a handler address it reads out of a table at
+ * SOFTDEVICE_BASE_ADDRESS. If the SoftDevice was never flashed, that table
+ * reads as erased and the first SoftDevice call branches to 0xFFFFFFFF. The
+ * SoftDevice info struct sits SOFTDEVICE_INFO_STRUCT_OFFSET into the image and
+ * carries SD_MAGIC_NUMBER one word in. */
+static inline bool softdevice_is_present(void) {
+  uint32_t const info = SOFTDEVICE_BASE_ADDRESS + SOFTDEVICE_INFO_STRUCT_OFFSET;
+
+  /* Bound the read first. The only vendored S145 v9.0.0 image is the nRF54L15
+   * build, based at 0x00158C00, which is past the end of RRAM on the L10
+   * (0x000FD000) and the L05 (0x0007D000) -- those boards have no SoftDevice
+   * that fits, and reading an unmapped RRAM address bus-faults rather than
+   * returning 0xFFFFFFFF. This folds to a constant per board. */
+  if ((info + 8) > NRF_MEMORY_FLASH_SIZE) {
+    return false;
+  }
+
+  return *(uint32_t const *)(info + 4) == SD_MAGIC_NUMBER;
+}
+
 bool is_ota(void) {
   return _ota_dfu;
 }
 
 static void check_dfu_mode(void);
 static uint32_t ble_stack_init(void);
-
-// The SoftDevice must only be initialized if a chip reset has occurred.
-// Soft reset (jump ) from application must not reinitialize the SoftDevice.
-static void mbr_init_sd(void) {
-  PRINTF("SD_MBR_COMMAND_INIT_SD\r\n");
-  sd_mbr_command_t com = {.command = SD_MBR_COMMAND_INIT_SD};
-  sd_mbr_command(&com);
-}
 
 // Disable the SoftDevice if it is enabled.
 static void disable_softdevice(void) {
@@ -198,11 +213,15 @@ int main(void) {
        bootloader_app_is_valid() && 
       !bootloader_dfu_sd_in_progress()) {
     PRINTF("App is valid\r\n");
-    if (is_sd_existed()) {
-      // MBR forward IRQ to SD (if not already)
-      if (!_sd_inited) mbr_init_sd();
 
-      // Make sure SD is disabled
+    /* If the application jumped here with the SoftDevice already running
+     * (buttonless DFU), shut it down before handing control back. This used to
+     * sit behind is_sd_existed() together with an SD_MBR_COMMAND_INIT_SD call,
+     * neither of which means anything on nRF54L: there is no MBR to command,
+     * and the SoftDevice is never below the application. On a cold boot the
+     * SoftDevice was never enabled and there is nothing to do -- and nothing to
+     * ask, since sd_softdevice_is_enabled() is itself an SVC into it. */
+    if (_sd_inited) {
       disable_softdevice();
     }
 
@@ -233,6 +252,15 @@ static void check_dfu_mode(void) {
 
   // Start Bootloader in BLE OTA mode
   _ota_dfu = (gpregret == DFU_MAGIC_OTA_APPJUM) || (gpregret == DFU_MAGIC_OTA_RESET);
+
+  /* ...but only if there is a SoftDevice to talk to. Serial DFU is the last way
+   * back into a board that has no debugger attached, so falling back to it
+   * beats faulting inside the first sd_* call. */
+  if (_ota_dfu && !softdevice_is_present()) {
+    PRINTF("SoftDevice not present, falling back to serial DFU\r\n");
+    _ota_dfu    = false;
+    _sd_inited  = false;
+  }
 
   // Serial only mode
   bool const serial_only_dfu = (gpregret == DFU_MAGIC_SERIAL_ONLY_RESET);
@@ -304,7 +332,11 @@ static void check_dfu_mode(void) {
   if (dfu_start || !valid_app) {
     if (_ota_dfu) {
       led_state(STATE_BLE_DISCONNECTED);
-      if (!_sd_inited) mbr_init_sd();
+      /* No SD_MBR_COMMAND_INIT_SD here: nRF54L has no MBR, so that SVC had
+       * nothing to reach and hung in the bootloader's own SVC_Handler.
+       * sd_softdevice_enable() inside ble_stack_init() is what brings S145 up,
+       * and it reaches the SoftDevice through the SVC forwarding installed by
+       * src/sd_isr_nrf54l.S. */
       _sd_inited = true;
       ble_stack_init();
     } else {

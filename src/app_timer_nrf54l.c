@@ -4,11 +4,18 @@
  * Replaces the SDK's RTC1-based app_timer.c since nRF54L has no RTC
  * (it uses GRTC which has a completely different register interface).
  *
- * Uses TIMER20 in 24-bit mode with prescaler to approximate the 32768 Hz
+ * Uses TIMER21 in 24-bit mode with prescaler to approximate the 32768 Hz
  * tick rate of the original RTC1-based implementation.
  *
- * TIMER20 @ 128 MHz / 2^12 = 31250 Hz (close to 32768 Hz)
+ * TIMER21 @ 128 MHz / 2^12 = 31250 Hz (close to 32768 Hz)
  * Uses CC[0] for compare event, CC[1] for counter capture.
+ *
+ * TIMER21 and SWI03 are used because the SoftDevice reserves the obvious
+ * choices: nrf_sd_def.h gives SD_TIMER2X_INSTANCES_USED = 0x1 (TIMER20) and
+ * SD_SWI_USED = 0x7 (SWI00, SWI01, SWI02). This module used TIMER20 and SWI00,
+ * both of which S145 claims -- SWI00 is the SoftDevice's own interrupt and has
+ * to be forwarded to it (see src/sd_isr_nrf54l.S), so the two could not coexist
+ * and OTA DFU would have lost either its timers or its radio.
  *
  * This is an MVP implementation sufficient for bootloader use:
  * - Single-shot and repeating timers
@@ -32,8 +39,8 @@
 #endif
 
 /* TIMER peripheral used for app_timer */
-#define TIMER_INST          NRF_TIMER20
-#define TIMER_IRQn_INST     TIMER20_IRQn
+#define TIMER_INST          NRF_TIMER21
+#define TIMER_IRQn_INST     TIMER21_IRQn
 #define TIMER_IRQ_PRI       APP_TIMER_CONFIG_IRQ_PRIORITY
 #define SWI_IRQ_PRI         APP_TIMER_CONFIG_IRQ_PRIORITY
 
@@ -43,10 +50,16 @@
 #define MAX_TASKS_DELAY     47
 
 /* SWI for deferred timer list processing */
-#if (APP_TIMER_CONFIG_SWI_NUMBER == 0)
-#define SWI_IRQn_INST SWI00_IRQn
-#elif (APP_TIMER_CONFIG_SWI_NUMBER == 1)
-#define SWI_IRQn_INST SWI01_IRQn
+/* SWI00, SWI01 and SWI02 are unavailable on this family: nrf_sd_def.h marks
+ * all three as used by the SoftDevice (SD_SWI_USED = 0x7). SWI00 is the
+ * SoftDevice's own and is forwarded to it, SWI01 is SD_EVT_IRQn and SWI02 is
+ * RADIO_NOTIFICATION_IRQn, both raised by the SoftDevice for us to handle.
+ * That leaves SWI03. */
+#if (APP_TIMER_CONFIG_SWI_NUMBER == 3)
+#define SWI_IRQn_INST SWI03_IRQn
+#define SWI_IRQ_HANDLER SWI03_IRQHandler
+#elif (APP_TIMER_CONFIG_SWI_NUMBER) < 3
+#error "SWI00/01/02 are reserved by the SoftDevice on nRF54L; use SWI03."
 #else
 #error "Unsupported SWI number."
 #endif
@@ -531,7 +544,7 @@ static uint32_t timer_stop_op_schedule(timer_node_t * p_node, timer_user_op_type
 
 /*--- IRQ Handlers ---*/
 
-void TIMER20_IRQHandler(void)
+void TIMER21_IRQHandler(void)
 {
     /* Clear compare events */
     nrf_timer_event_clear(TIMER_INST, NRF_TIMER_EVENT_COMPARE0);
@@ -542,7 +555,7 @@ void TIMER20_IRQHandler(void)
     timer_timeouts_check();
 }
 
-void SWI00_IRQHandler(void)
+void SWI_IRQ_HANDLER(void)
 {
     timer_list_handler();
 }

@@ -105,7 +105,9 @@
 #define APP_TIMER_CONFIG_OP_QUEUE_SIZE     10
 #define APP_TIMER_CONFIG_USE_SCHEDULER     1
 #define APP_TIMER_WITH_PROFILER            0
-#define APP_TIMER_CONFIG_SWI_NUMBER        0
+// SWI00/01/02 belong to the SoftDevice on nRF54L (nrf_sd_def.h,
+// SD_SWI_USED = 0x7). Only SWI03 is free for the bootloader.
+#define APP_TIMER_CONFIG_SWI_NUMBER        3
 
 // <q> APP_TIMER_KEEPS_RTC_ACTIVE - Enable RTC always on
 // <i> If option is enabled RTC is kept running even if there is no active timers.

@@ -64,6 +64,7 @@ add_executable(bootloader
   src/flash_nrf5x.c
   src/main.c
   src/screen.c
+  src/sd_isr_nrf54l.S
   src/images.c
   src/boards/boards.c
   src/boards/${BOARD}/pinconfig.c
@@ -273,6 +274,24 @@ target_compile_definitions(bootloader PUBLIC ${SD_NAME_UPPER})
 # SD_CHIP_FAMILY is set per MCU variant above.
 set(SD_FILENAME ${SD_NAME}_${SD_CHIP_FAMILY}_${SD_VERSION})
 set(SD_HEX ${SOFTDEVICE_DIR}/${SD_FILENAME}/${SD_FILENAME}_softdevice.hex)
+
+# nRF54L has no MBR. The SoftDevice publishes the addresses of the handlers it
+# needs in a table at its own base address, and whoever owns the vector table --
+# the bootloader -- forwards those exceptions to it (nrf_sd_isr.h, and
+# src/sd_isr_nrf54l.S here). That base has to match the blob actually being
+# flashed, so read it out of the hex instead of keeping a copy in a header.
+execute_process(
+  COMMAND ${Python_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/tools/sd_base_addr.py ${SD_HEX}
+  OUTPUT_VARIABLE SOFTDEVICE_BASE_ADDRESS
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  RESULT_VARIABLE SD_BASE_ADDR_RESULT
+  )
+if (NOT SD_BASE_ADDR_RESULT EQUAL 0)
+  message(FATAL_ERROR "Could not read the SoftDevice base address from ${SD_HEX}")
+endif ()
+message(STATUS "SoftDevice base address: ${SOFTDEVICE_BASE_ADDRESS}")
+target_compile_definitions(bootloader PUBLIC
+  SOFTDEVICE_BASE_ADDRESS=${SOFTDEVICE_BASE_ADDRESS})
 
 target_compile_definitions(bootloader PUBLIC ${SD_NAME_UPPER})
 target_include_directories(bootloader PUBLIC
