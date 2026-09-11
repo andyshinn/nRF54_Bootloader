@@ -40,6 +40,8 @@
 
 #include "nrfx.h"
 #include "nrf_clock.h"
+#include "nrf_cracen.h"
+#include "nrf_cracen_rng.h"
 #include "nrfx_power.h"
 #include "nrfx_pwm.h"
 
@@ -367,22 +369,94 @@ static void check_dfu_mode(void) {
 
 // Initializes the SoftDevice by following SD specs section
 // "Master Boot Record and SoftDevice initializaton procedure"
+/* S145 will not enable the BLE stack until its RNG has been seeded --
+ * sd_ble_enable() answers NRF_ERROR_INVALID_STATE otherwise (ble.h) -- and it
+ * asks to be re-seeded at runtime with NRF_EVT_RAND_SEED_REQUEST. S140 on
+ * nRF52 had no such requirement, which is why this nRF52-derived bootloader
+ * never seeded anything and BLE DFU could never come up.
+ *
+ * nrf_soc.h wants SD_RAND_SEED_SIZE bytes from a NIST SP 800-90B compliant
+ * source; on nRF54L that is the CRACEN TRNG. Nothing here has run before us,
+ * so start the RNG on every call rather than tracking state. Mirrors
+ * nRF54Crypto's cracen_rng_start/cracen_rng_fill in nRF54_Arduino 63059ce.
+ */
+#define BOOTLOADER_RNG_TIMEOUT 100000
+
+static bool cracen_rng_seed(uint8_t *dest, size_t len) {
+  nrf_cracen_module_enable(NRF_CRACEN, NRF_CRACEN_MODULE_RNG_MASK);
+
+  nrf_cracen_rng_control_t cfg = { 0 };
+  cfg.enable            = true;
+  cfg.number_128_blocks = 1;
+  nrf_cracen_rng_control_set(NRF_CRACENCORE, &cfg);
+
+  uint32_t timeout = BOOTLOADER_RNG_TIMEOUT;
+  for (;;) {
+    nrf_cracen_rng_fsm_state_t state = nrf_cracen_rng_fsm_state_get(NRF_CRACENCORE);
+    if (state == NRF_CRACEN_RNG_FSM_STATE_IDLE_READY ||
+        state == NRF_CRACEN_RNG_FSM_STATE_FILL_FIFO) break;
+    if (state == NRF_CRACEN_RNG_FSM_STATE_ERROR) return false;
+    if (--timeout == 0) return false;
+  }
+
+  size_t offset = 0;
+  while (offset < len) {
+    timeout = BOOTLOADER_RNG_TIMEOUT;
+    while (nrf_cracen_rng_fifo_level_get(NRF_CRACENCORE) == 0) {
+      if (--timeout == 0) return false;
+    }
+    uint32_t word = nrf_cracen_rng_fifo_get(NRF_CRACENCORE);
+    size_t remaining = len - offset;
+    size_t to_copy = (remaining < 4) ? remaining : 4;
+    memcpy(dest + offset, &word, to_copy);
+    offset += to_copy;
+  }
+  return true;
+}
+
+static bool seed_softdevice_rng(void) {
+  uint8_t seed[SD_RAND_SEED_SIZE];
+
+  if (!cracen_rng_seed(seed, sizeof(seed))) return false;
+
+  uint32_t err = sd_rand_seed_set(seed);
+  memset(seed, 0, sizeof(seed));   // don't leave entropy on the stack
+
+  return (err == NRF_SUCCESS);
+}
+
 static uint32_t ble_stack_init(void) {
   // Forward vector table to bootloader address so that we can handle BLE events
   sd_softdevice_vector_table_base_set(BOOTLOADER_REGION_START);
 
   // Enable Softdevice, Use Internal OSC to compatible with all boards
   nrf_clock_lf_cfg_t clock_cfg = {
-      .source       = NRF_CLOCK_LF_SRC_RC,
-      .rc_ctiv      = 16,
-      .rc_temp_ctiv = 2,
-      .accuracy     = NRF_CLOCK_LF_ACCURACY_250_PPM
+      .source        = NRF_CLOCK_LF_SRC_RC,
+      .rc_ctiv       = 16,
+      .rc_temp_ctiv  = 2,
+      .accuracy      = NRF_CLOCK_LF_ACCURACY_250_PPM,
+      /* S145 added these two fields; S140's struct had neither, so the
+       * nRF52-derived initialiser above left both zero. hfint_ctiv's valid
+       * range is 1-255 (nrf_sdm.h), so zero made sd_softdevice_enable()
+       * return NRF_ERROR_INVALID_PARAM -- and because the result was
+       * discarded, the bootloader carried on with no SoftDevice and simply
+       * never advertised. 4 and 1500 are what the SoftDevice itself uses when
+       * p_clock_lf_cfg is NULL, and match nRF54_Arduino 63059ce. */
+      .hfclk_latency = 1500,
+      .hfint_ctiv    = 4
   };
+  uint32_t sd_err;
   #ifdef ANT_LICENSE_KEY
-    sd_softdevice_enable(&clock_cfg, app_error_fault_handler, ANT_LICENSE_KEY);
+    sd_err = sd_softdevice_enable(&clock_cfg, app_error_fault_handler, ANT_LICENSE_KEY);
   #else
-    sd_softdevice_enable(&clock_cfg, app_error_fault_handler);
+    sd_err = sd_softdevice_enable(&clock_cfg, app_error_fault_handler);
   #endif
+  /* Don't press on without a SoftDevice: every sd_* call below is an SVC that
+   * would be forwarded into a stack that never came up. */
+  if (NRF_SUCCESS != sd_err) {
+    PRINTF("sd_softdevice_enable failed: 0x%lX\r\n", (unsigned long) sd_err);
+    return sd_err;
+  }
   sd_nvic_EnableIRQ(SD_EVT_IRQn);
 
   /*------------- Configure BLE params  -------------*/
@@ -428,6 +502,13 @@ static uint32_t ble_stack_init(void) {
   blecfg.conn_cfg.conn_cfg_tag = BLE_CONN_CFG_HIGH_BANDWIDTH;
   blecfg.conn_cfg.params.gattc_conn_cfg.write_cmd_tx_queue_size = BLEGATTC_WRCMD_QSIZE;
   sd_ble_cfg_set(BLE_CONN_CFG_GATTC, &blecfg, ram_start);
+
+  /* Seed before enabling: sd_ble_enable() reports NRF_ERROR_INVALID_STATE
+   * while the generator is unseeded. */
+  if (!seed_softdevice_rng()) {
+    PRINTF("Failed to seed the SoftDevice RNG\r\n");
+    return NRF_ERROR_INTERNAL;
+  }
 
   // Enable BLE stack.
   // Note: Interrupt state (enabled, forwarding) is not work properly if not enable ble
@@ -565,6 +646,10 @@ uint32_t proc_soc(void) {
   uint32_t err = sd_evt_get(&soc_evt);
 
   if (NRF_SUCCESS == err) {
+    // S145 asks for fresh entropy at runtime; ignoring it stalls the stack.
+    if (NRF_EVT_RAND_SEED_REQUEST == soc_evt) {
+      (void) seed_softdevice_rng();
+    }
     pstorage_sys_event_handler(soc_evt);
   }
 
