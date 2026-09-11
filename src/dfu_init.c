@@ -236,10 +236,20 @@ uint32_t dfu_init_prevalidate(uint8_t * p_init_data, uint32_t init_data_len, uin
 	// Third check: Check the array of supported SoftDevices by this application.
 	//              If the installed SoftDevice does not match any SoftDevice in the list then an
 	//              error is returned.
+	/* Read the FWID from where the SoftDevice actually is. SD_FWID_GET(MBR_SIZE)
+	 * is an nRF52 idiom: there the MBR occupies the first page and the
+	 * SoftDevice starts immediately after it, so MBR_SIZE (0x1000) doubles as
+	 * the SoftDevice base. nRF54L has no MBR and S145 lives high in RRAM, so
+	 * that expression reads 0x1000 + SD_FWID_OFFSET -- an address inside the
+	 * *application* -- and compares the package's sd_req against whatever the
+	 * app happens to hold there. It cannot match, so every serial and BLE DFU
+	 * failed prevalidation with NRF_ERROR_INVALID_DATA and the init packet went
+	 * unacknowledged. SOFTDEVICE_BASE_ADDRESS is what main.c already uses to
+	 * reach the same info struct; CMake derives it from the SoftDevice hex. */
 	while (i < p_init_packet->softdevice_len)
 	{
 		if (p_init_packet->softdevice[i] == DFU_SOFTDEVICE_ANY ||
-			p_init_packet->softdevice[i] == SD_FWID_GET(MBR_SIZE))
+			p_init_packet->softdevice[i] == SD_FWID_GET(SOFTDEVICE_BASE_ADDRESS))
 		{
 			// Found a match. Break the loop.
 			break;
