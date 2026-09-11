@@ -37,6 +37,7 @@
  * compatibility with the DFU protocol, but simplify erase operations.
  */
 
+#include <stdbool.h>
 #include <string.h>
 #include "nrf_sdm.h"
 #include "flash_nrf5x.h"
@@ -59,12 +60,32 @@ static void rramc_wait_ready(void)
 }
 
 /**
+ * Enable or disable RRAM writes.
+ *
+ * RRAM is memory-mapped and directly writable, but only while
+ * RRAMC.CONFIG.WEN is set. With WEN clear a store to RRAM does not silently
+ * do nothing -- it raises a precise BusFault, which escalates to HardFault.
+ * That is what every DFU on this port hit: the app erase faulted on its first
+ * word (BFAR = 0x00001000 = DFU_BANK_0_REGION_START) inside
+ * dfu_prepare_func_app_erase(), so DFU_STATE_PREPARING never advanced to
+ * DFU_STATE_RDY and the init packet was never acknowledged.
+ *
+ * WRITEBUFSIZE is left at 0 (unbuffered) so each store lands directly and no
+ * COMMITWRITEBUF is needed. Keep WEN set only across the writes themselves.
+ */
+static void rramc_write_enable(bool enable)
+{
+    rramc_wait_ready();
+    NRF_RRAMC->CONFIG = enable ? RRAMC_CONFIG_WEN_Msk : 0;
+}
+
+/**
  * Write words to RRAM via direct memory-mapped access.
  * RRAM is directly writable; we just need to ensure RRAMC is ready.
  */
 static void rramc_words_write(uint32_t addr, uint32_t const *src, uint32_t num_words)
 {
-    rramc_wait_ready();
+    rramc_write_enable(true);
 
     volatile uint32_t *dst_ptr = (volatile uint32_t *)addr;
     for (uint32_t i = 0; i < num_words; i++) {
@@ -72,6 +93,7 @@ static void rramc_words_write(uint32_t addr, uint32_t const *src, uint32_t num_w
     }
 
     rramc_wait_ready();
+    rramc_write_enable(false);
 }
 
 /**
@@ -80,17 +102,18 @@ static void rramc_words_write(uint32_t addr, uint32_t const *src, uint32_t num_w
  */
 static void rramc_page_erase(uint32_t addr)
 {
-    uint32_t erase_buf[CODE_PAGE_SIZE / 4];
-    memset(erase_buf, 0xFF, CODE_PAGE_SIZE);
-
-    rramc_wait_ready();
+    /* Write the 0xFF pattern straight out. The previous version built it in a
+     * CODE_PAGE_SIZE stack buffer first -- 4 KB of stack in a bootloader, for
+     * a constant. */
+    rramc_write_enable(true);
 
     volatile uint32_t *dst_ptr = (volatile uint32_t *)addr;
     for (uint32_t i = 0; i < CODE_PAGE_SIZE / 4; i++) {
-        dst_ptr[i] = erase_buf[i];
+        dst_ptr[i] = 0xFFFFFFFFUL;
     }
 
     rramc_wait_ready();
+    rramc_write_enable(false);
 }
 
 void flash_nrf5x_erase (uint32_t dst, uint32_t len)
