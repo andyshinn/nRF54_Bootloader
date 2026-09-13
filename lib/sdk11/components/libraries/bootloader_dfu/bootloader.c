@@ -126,9 +126,13 @@ static void wait_for_events(void)
 
     // Feed all Watchdog just in case application enable it
     // WDT cannot be disabled once started. It even last through NVIC soft reset
-    if ( nrf_wdt_started(NRF_WDT) )
+    if ( nrf_wdt_started(NRF_WDT30) )
     {
-      for (uint8_t i=0; i<8; i++) nrf_wdt_reload_request_set(NRF_WDT, i);
+      for (uint8_t i=0; i<8; i++) nrf_wdt_reload_request_set(NRF_WDT30, i);
+    }
+    if ( nrf_wdt_started(NRF_WDT31) )
+    {
+      for (uint8_t i=0; i<8; i++) nrf_wdt_reload_request_set(NRF_WDT31, i);
     }
 
     // Event received. Process it from the scheduler.
@@ -172,6 +176,11 @@ bool bootloader_app_is_valid(void)
     return false;
   }
 
+  // An erased settings page means the image was written over SWD, not by DFU: trust it.
+  if ( p_bootloader_settings->bank_0 == 0xFFFF )
+  {
+    return true;
+  }
   // The application in CODE region 1 is flagged as valid during update.
   if ( p_bootloader_settings->bank_0 == BANK_VALID_APP )
   {
@@ -397,49 +406,13 @@ uint32_t bootloader_dfu_start(bool ota, uint32_t timeout_ms, bool cancel_timeout
 
 void bootloader_app_start(void)
 {
-  // Disable all interrupts
-  NVIC->ICER[0]=0xFFFFFFFF;
-  NVIC->ICPR[0]=0xFFFFFFFF;
-#if defined(__NRF_NVIC_ISER_COUNT) && __NRF_NVIC_ISER_COUNT == 2
-  NVIC->ICER[1]=0xFFFFFFFF;
-  NVIC->ICPR[1]=0xFFFFFFFF;
-#endif
-
-  uint32_t fwd_ret;
-  uint32_t app_addr;
-
-  if ( is_sd_existed() )
+  for (uint8_t i = 0; i < 8; i++)
   {
-    PRINTF("SoftDevice exist\r\n");
-    // App starts after SoftDevice
-    app_addr = SD_SIZE_GET(MBR_SIZE);
-    fwd_ret = sd_softdevice_vector_table_base_set(app_addr);
-  }else
-  {
-    PRINTF("SoftDevice not exist\r\n");
-
-    // App starts right after MBR
-    app_addr = MBR_SIZE;
-    sd_mbr_command_t command =
-    {
-      .command = SD_MBR_COMMAND_IRQ_FORWARD_ADDRESS_SET,
-      .params.irq_forward_address_set.address = app_addr,
-    };
-
-    fwd_ret = sd_mbr_command(&command);
+    NVIC->ICER[i] = 0xFFFFFFFF;
+    NVIC->ICPR[i] = 0xFFFFFFFF;
   }
-
-  // unlikely failed to forward vector table, manually set forward address
-  if ( fwd_ret != NRF_SUCCESS )
-  {
-    PRINT_HEX(fwd_ret);
-
-    // MBR use first 4-bytes of SRAM to store foward address
-    *(uint32_t *)(0x20000000) = app_addr;
-  }
-
-  // jump to app
-  bootloader_util_app_start(app_addr);
+  // The application owns its vector table at CODE_REGION_1_START (no MBR on nRF54L)
+  bootloader_util_app_start(CODE_REGION_1_START);
 }
 
 

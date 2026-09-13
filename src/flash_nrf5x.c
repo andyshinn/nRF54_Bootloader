@@ -39,9 +39,12 @@
 
 #include <string.h>
 #include "nrf_sdm.h"
+#include "nrf_soc.h"
 #include "flash_nrf5x.h"
 #include "boards.h"
 #include "dfu_types.h"
+#include "nrfx_rramc.h"
+#include <stdbool.h>
 
 #define FLASH_CACHE_INVALID_ADDR  0xffffffff
 
@@ -51,46 +54,27 @@ static uint8_t _fl_buf[CODE_PAGE_SIZE] __attribute__((aligned(4)));
 /**
  * Wait for RRAMC to be ready for a new operation.
  */
-static void rramc_wait_ready(void)
-{
-    while (NRF_RRAMC->READY == 0) {
-        // wait
-    }
-}
+// RRAM has no erase; a page "erase" writes 0xFF. Writes go through the SoftDevice while it
+// runs (radio timing), otherwise straight to the RRAMC.
+static const uint32_t ff_page[CODE_PAGE_SIZE / 4] = { [0 ... (CODE_PAGE_SIZE / 4) - 1] = 0xFFFFFFFF };
 
-/**
- * Write words to RRAM via direct memory-mapped access.
- * RRAM is directly writable; we just need to ensure RRAMC is ready.
- */
 static void rramc_words_write(uint32_t addr, uint32_t const *src, uint32_t num_words)
 {
-    rramc_wait_ready();
-
-    volatile uint32_t *dst_ptr = (volatile uint32_t *)addr;
-    for (uint32_t i = 0; i < num_words; i++) {
-        dst_ptr[i] = src[i];
+    static bool inited = false;
+    if (!inited) {
+        nrfx_rramc_config_t cfg = NRFX_RRAMC_DEFAULT_CONFIG(32);
+        cfg.mode_write = true;
+        nrfx_rramc_init(&cfg, NULL);
+        inited = true;
     }
-
-    rramc_wait_ready();
+    nrfx_rramc_write_enable_set(true, 32);
+    nrfx_rramc_words_write(addr, src, num_words);
+    nrfx_rramc_write_buffer_commit();
 }
 
-/**
- * Erase a page by writing 0xFF pattern.
- * RRAM doesn't have a hardware erase; we simulate it by writing all 0xFF.
- */
 static void rramc_page_erase(uint32_t addr)
 {
-    uint32_t erase_buf[CODE_PAGE_SIZE / 4];
-    memset(erase_buf, 0xFF, CODE_PAGE_SIZE);
-
-    rramc_wait_ready();
-
-    volatile uint32_t *dst_ptr = (volatile uint32_t *)addr;
-    for (uint32_t i = 0; i < CODE_PAGE_SIZE / 4; i++) {
-        dst_ptr[i] = erase_buf[i];
-    }
-
-    rramc_wait_ready();
+    rramc_words_write(addr, ff_page, CODE_PAGE_SIZE / 4);
 }
 
 void flash_nrf5x_erase (uint32_t dst, uint32_t len)
@@ -176,15 +160,19 @@ void flash_nrf5x_write (uint32_t dst, void const *src, uint32_t len, bool need_e
 
 uint32_t sd_flash_page_erase(uint32_t page_number)
 {
+    uint8_t sd_en = 0;
+    (void) sd_softdevice_is_enabled(&sd_en);
+    if (sd_en) {
+        // async like on nRF52: pstorage waits for the NRF_EVT_FLASH_OPERATION_* event
+        return sd_flash_write((uint32_t *)(page_number * CODE_PAGE_SIZE), ff_page, CODE_PAGE_SIZE / 4);
+    }
     rramc_page_erase(page_number * CODE_PAGE_SIZE);
-    return 0; /* NRF_SUCCESS */
+    return NRF_SUCCESS;
 }
 
 void nrfx_nvmc_word_write(uint32_t addr, uint32_t value)
 {
-    rramc_wait_ready();
-    *(volatile uint32_t *)addr = value;
-    rramc_wait_ready();
+    rramc_words_write(addr, &value, 1);
 }
 
 void nrfx_nvmc_page_erase(uint32_t addr)

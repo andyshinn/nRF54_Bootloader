@@ -1,60 +1,36 @@
-/*
- * The MIT License (MIT)
- *
- * Copyright (c) 2018 Ha Thach
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
-#ifndef NRF54L10DK_H
-#define NRF54L10DK_H
+#ifndef _NRF54L10DK_H
+#define _NRF54L10DK_H
 
 #include "nrf_gpio.h"
 
-/*------------------------------------------------------------------*/
-/* LED — same pinout as nRF54L15-DK
- *------------------------------------------------------------------*/
-#define LEDS_NUMBER         4
-#define LED_PRIMARY_PIN     0
-#define LED_SECONDARY_PIN   1
-#define LED_STATE_ON        0
+// LED0 P2.09, LED1 P1.10 (active low)
+#define LEDS_NUMBER           2
+#define LED_PRIMARY_PIN       NRF_GPIO_PIN_MAP(2, 9)
+#define LED_SECONDARY_PIN     NRF_GPIO_PIN_MAP(1, 10)
+#define LED_STATE_ON          0
 
-/*------------------------------------------------------------------*/
-/* BUTTON
- *------------------------------------------------------------------*/
-#define BUTTONS_NUMBER      4
-#define BUTTON_1            0
-#define BUTTON_2            1
-#define BUTTON_PULL         NRF_GPIO_PIN_PULLUP
+#define NEOPIXELS_NUMBER      0
 
-/*------------------------------------------------------------------*/
-/* UART (VCOM via J-Link CDC) — same as nRF54L15-DK
- *------------------------------------------------------------------*/
-#define RX_PIN_NUMBER        NRF_GPIO_PIN_MAP(1, 5)
-#define TX_PIN_NUMBER        NRF_GPIO_PIN_MAP(1, 4)
-#define CTS_PIN_NUMBER       NRF_GPIO_PIN_MAP(1, 7)
-#define RTS_PIN_NUMBER       NRF_GPIO_PIN_MAP(1, 6)
+// BTN0 P1.13 (DFU), BTN1 P1.09 (DFU + BTN1 -> OTA)
+#define BUTTONS_NUMBER        2
+#define BUTTON_1              NRF_GPIO_PIN_MAP(1, 13)
+#define BUTTON_2              NRF_GPIO_PIN_MAP(1, 9)
+#define BUTTON_DFU            BUTTON_1
+#define BUTTON_DFU_OTA        BUTTON_2
+#define BUTTON_PULL           NRF_GPIO_PIN_PULLUP
+
+// VCOM0 of the on-board J-Link on UARTE20 (P1 pins)
+#define BOARD_UARTE_INSTANCE   NRF_UARTE20
+#define BOARD_UARTE_IRQHandler SERIAL20_IRQHandler
+#define TX_PIN_NUMBER         NRF_GPIO_PIN_MAP(1, 4)
+#define RX_PIN_NUMBER         NRF_GPIO_PIN_MAP(1, 5)
+#define CTS_PIN_NUMBER        0xFFFFFFFF
+#define RTS_PIN_NUMBER        0xFFFFFFFF
 
 //--------------------------------------------------------------------+
 // BLE OTA
 //--------------------------------------------------------------------+
-#define BLEDIS_MANUFACTURER    "Nordic"
-#define BLEDIS_MODEL           "nRF54L10-DK"
+#define BLEDIS_MANUFACTURER   "Nordic"
+#define BLEDIS_MODEL          "NRF54L10-DK"
 
-#endif // NRF54L10DK_H
+#endif

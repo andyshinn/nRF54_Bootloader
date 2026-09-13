@@ -47,6 +47,10 @@
 #define SWI_IRQn_INST SWI00_IRQn
 #elif (APP_TIMER_CONFIG_SWI_NUMBER == 1)
 #define SWI_IRQn_INST SWI01_IRQn
+#elif (APP_TIMER_CONFIG_SWI_NUMBER == 3)
+#define SWI_IRQn_INST SWI03_IRQn
+#elif (APP_TIMER_CONFIG_SWI_NUMBER == 3)
+#define SWI_IRQn_INST SWI03_IRQn
 #else
 #error "Unsupported SWI number."
 #endif
@@ -542,7 +546,7 @@ void TIMER20_IRQHandler(void)
     timer_timeouts_check();
 }
 
-void SWI00_IRQHandler(void)
+void SWI03_IRQHandler(void)
 {
     timer_list_handler();
 }

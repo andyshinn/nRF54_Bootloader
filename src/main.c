@@ -63,6 +63,9 @@
 #include "pstorage_platform.h"
 #include "nrf_mbr.h"
 #include "pstorage.h"
+#include "sd_isr.h"
+#include "nrf_cracen.h"
+#include "nrf_cracen_rng.h"
 
 /* nRF54L has no USB peripheral — serial DFU uses UART only */
 #define usb_init(x)       led_state(STATE_USB_MOUNTED)
@@ -95,7 +98,7 @@
 #define DFU_DBL_RESET_MAGIC             0x5A1AD5      // SALADS
 #define DFU_DBL_RESET_APP               0x4ee5677e
 #define DFU_DBL_RESET_DELAY             500
-#define DFU_DBL_RESET_MEM               0x200047F8
+#define DFU_DBL_RESET_MEM               (0x20040000 - 0x08) // see linker DBL_RESET
 
 #define BOOTLOADER_VERSION_REGISTER     NRF_TIMER22->CC[0]
 #define DFU_SERIAL_STARTUP_INTERVAL     1000
@@ -127,12 +130,31 @@ bool is_ota(void) {
 static void check_dfu_mode(void);
 static uint32_t ble_stack_init(void);
 
-// The SoftDevice must only be initialized if a chip reset has occurred.
-// Soft reset (jump ) from application must not reinitialize the SoftDevice.
-static void mbr_init_sd(void) {
-  PRINTF("SD_MBR_COMMAND_INIT_SD\r\n");
-  sd_mbr_command_t com = {.command = SD_MBR_COMMAND_INIT_SD};
-  sd_mbr_command(&com);
+// Entropy for sd_rand_seed_set() from the CRACEN TRNG (nRF54L has no RNG peripheral)
+static bool cracen_seed(uint8_t *dest, uint32_t len) {
+  nrf_cracen_module_enable(NRF_CRACEN, NRF_CRACEN_MODULE_RNG_MASK);
+  nrf_cracen_rng_control_t cfg = {0};
+  cfg.enable = true;
+  cfg.number_128_blocks = 1;
+  nrf_cracen_rng_control_set(NRF_CRACENCORE, &cfg);
+
+  uint32_t timeout = 100000;
+  for (;;) {
+    nrf_cracen_rng_fsm_state_t st = nrf_cracen_rng_fsm_state_get(NRF_CRACENCORE);
+    if (st == NRF_CRACEN_RNG_FSM_STATE_IDLE_READY || st == NRF_CRACEN_RNG_FSM_STATE_FILL_FIFO) break;
+    if (st == NRF_CRACEN_RNG_FSM_STATE_ERROR || --timeout == 0) return false;
+  }
+  for (uint32_t off = 0; off < len;) {
+    timeout = 100000;
+    while (nrf_cracen_rng_fifo_level_get(NRF_CRACENCORE) == 0) {
+      if (--timeout == 0) return false;
+    }
+    uint32_t word = nrf_cracen_rng_fifo_get(NRF_CRACENCORE);
+    uint32_t n = (len - off < 4) ? (len - off) : 4;
+    memcpy(dest + off, &word, n);
+    off += n;
+  }
+  return true;
 }
 
 // Disable the SoftDevice if it is enabled.
@@ -148,10 +170,8 @@ static void disable_softdevice(void) {
 //
 //--------------------------------------------------------------------+
 int main(void) {
-  // Populate Boot Address and MBR Param into MBR if not already
-  // MBR_BOOTLOADER_ADDR/MBR_PARAM_PAGE_ADDR are used if available, else UICR registers are used
-  // Note: skip it for now since this will prevent us to change the size of bootloader in the future
-  // bootloader_mbr_addrs_populate();
+  // The SoftDevice reset handler must run before any sd_* call (no MBR does it for us)
+  if (is_sd_existed()) sd_isr_boot_init();
 
   // Save bootloader version to pre-defined register, retrieved by application
   // TODO move to CF2
@@ -195,11 +215,8 @@ int main(void) {
       !bootloader_dfu_sd_in_progress()) {
     PRINTF("App is valid\r\n");
     if (is_sd_existed()) {
-      // MBR forward IRQ to SD (if not already)
-      if (!_sd_inited) mbr_init_sd();
-
-      // Make sure SD is disabled
       disable_softdevice();
+      sd_isr_forwarding_disable();
     }
 
     // clear in case we kept DFU_DBL_RESET_APP there
@@ -225,7 +242,7 @@ static void check_dfu_mode(void) {
   uint32_t const gpregret = NRF_POWER->GPREGRET[0];
 
   // SD is already Initialized in case of BOOTLOADER_DFU_OTA_MAGIC
-  _sd_inited = (gpregret == DFU_MAGIC_OTA_APPJUM);
+  _sd_inited = false; // both OTA magics arrive through a reset on nRF54L
 
   // Start Bootloader in BLE OTA mode
   _ota_dfu = (gpregret == DFU_MAGIC_OTA_APPJUM) || (gpregret == DFU_MAGIC_OTA_RESET);
@@ -300,7 +317,6 @@ static void check_dfu_mode(void) {
   if (dfu_start || !valid_app) {
     if (_ota_dfu) {
       led_state(STATE_BLE_DISCONNECTED);
-      if (!_sd_inited) mbr_init_sd();
       _sd_inited = true;
       ble_stack_init();
     } else {
@@ -332,21 +348,24 @@ static void check_dfu_mode(void) {
 // Initializes the SoftDevice by following SD specs section
 // "Master Boot Record and SoftDevice initializaton procedure"
 static uint32_t ble_stack_init(void) {
-  // Forward vector table to bootloader address so that we can handle BLE events
-  sd_softdevice_vector_table_base_set(BOOTLOADER_REGION_START);
-
-  // Enable Softdevice, Use Internal OSC to compatible with all boards
+  sd_isr_forwarding_enable();
+  // Internal RC works on every board; hfint_ctiv must be 1..255 on s145
   nrf_clock_lf_cfg_t clock_cfg = {
-      .source       = NRF_CLOCK_LF_SRC_RC,
-      .rc_ctiv      = 16,
-      .rc_temp_ctiv = 2,
-      .accuracy     = NRF_CLOCK_LF_ACCURACY_250_PPM
+      .source        = NRF_CLOCK_LF_SRC_RC,
+      .rc_ctiv       = 16,
+      .rc_temp_ctiv  = 2,
+      .accuracy      = NRF_CLOCK_LF_ACCURACY_250_PPM,
+      .hfclk_latency = 1500,
+      .hfint_ctiv    = 60
   };
-  #ifdef ANT_LICENSE_KEY
-    sd_softdevice_enable(&clock_cfg, app_error_fault_handler, ANT_LICENSE_KEY);
-  #else
-    sd_softdevice_enable(&clock_cfg, app_error_fault_handler);
-  #endif
+  APP_ERROR_CHECK( sd_softdevice_enable(&clock_cfg, app_error_fault_handler) );
+
+  // s145 raises NRF_EVT_RAND_SEED_REQUEST; sd_ble_enable() fails without a seed
+  uint8_t seed[SD_RAND_SEED_SIZE];
+  if (!cracen_seed(seed, sizeof(seed))) APP_ERROR_CHECK(NRF_ERROR_INTERNAL);
+  APP_ERROR_CHECK( sd_rand_seed_set(seed) );
+
+  NVIC_SetPriority(SD_EVT_IRQn, 6);
   sd_nvic_EnableIRQ(SD_EVT_IRQn);
 
   /*------------- Configure BLE params  -------------*/
@@ -393,9 +412,7 @@ static uint32_t ble_stack_init(void) {
   blecfg.conn_cfg.params.gattc_conn_cfg.write_cmd_tx_queue_size = BLEGATTC_WRCMD_QSIZE;
   sd_ble_cfg_set(BLE_CONN_CFG_GATTC, &blecfg, ram_start);
 
-  // Enable BLE stack.
-  // Note: Interrupt state (enabled, forwarding) is not work properly if not enable ble
-  sd_ble_enable(&ram_start);
+  APP_ERROR_CHECK( sd_ble_enable(&ram_start) );
 
 #if BLEGATT_ATT_MTU_MAX > 23 || defined(GPIO_PA_PIN) || defined(GPIO_LNA_PIN)
   ble_opt_t  opt;

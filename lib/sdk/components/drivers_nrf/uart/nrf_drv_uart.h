@@ -67,11 +67,16 @@
 #include "sdk_config.h"
 
 /* nRF54L peripheral instance mapping */
+/* nRF54L binds each UARTE to one GPIO port; the board picks the instance for its pins. */
+#ifndef BOARD_UARTE_INSTANCE
+#define BOARD_UARTE_INSTANCE    NRF_UARTE20
+#define BOARD_UARTE_IRQHandler  SERIAL20_IRQHandler
+#endif
 #ifndef NRF_UART0
-#define NRF_UART0   NRF_UARTE00
+#define NRF_UART0   BOARD_UARTE_INSTANCE
 #endif
 #ifndef NRF_UARTE0
-#define NRF_UARTE0  NRF_UARTE00
+#define NRF_UARTE0  BOARD_UARTE_INSTANCE
 #endif
 
 #ifdef __cplusplus

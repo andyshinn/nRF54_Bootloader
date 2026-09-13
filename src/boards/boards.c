@@ -26,6 +26,7 @@
 #include "nrf_pwm.h"
 #include "app_scheduler.h"
 #include "app_timer.h"
+#include "nrfy_grtc.h"
 
 #ifdef LED_APA102_CLK
 #include "nrf_spim.h"
@@ -69,12 +70,15 @@ bool button_pressed(uint32_t pin) {
 void __attribute__((weak)) board_init2(void) {}
 
 void board_init(void) {
-  // stop LF clock just in case we jump from application without reset
-  // nRF54L configures LFCLK through the CLOCK peripheral
   NRF_CLOCK->LFCLK.SRC = (CLOCK_LFCLK_SRC_SRC_LFRC << CLOCK_LFCLK_SRC_SRC_Pos);
+  NRF_CLOCK->TASKS_LFCLKSTART = 1;
 
-  // TODO: nRF54L clock startup may need GRTC or different peripheral setup
-  // For now, the SoftDevice handles LF clock configuration
+  // sd_softdevice_enable() requires the GRTC SYSCOUNTER running with AUTOEN; the counter survives soft resets
+  if (!nrf_grtc_sys_counter_check(NRF_GRTC)) {
+    nrfy_grtc_prepare(NRF_GRTC, true);
+    nrfy_grtc_sys_counter_start(NRF_GRTC, true);
+  }
+  nrf_grtc_sys_counter_auto_mode_set(NRF_GRTC, true);
 
 #ifdef BUTTON_DFU
   button_init(BUTTON_DFU);
@@ -148,8 +152,8 @@ void board_teardown(void) {
   // Stop TIMER20 used by app_timer (nRF54L has no RTC; uses hardware timer)
   app_timer_stop_all();
 
-  // Stop LF clock oscillator
-  // nRF54L clock control is via OSCILLATORS peripheral
+  // Stop the LF clock so the application can pick its own source
+  NRF_CLOCK->TASKS_LFCLKSTOP = 1;
 
   // make sure all pins are back in reset state
   // NUMBER_OF_PINS is defined in nrf_gpio.h

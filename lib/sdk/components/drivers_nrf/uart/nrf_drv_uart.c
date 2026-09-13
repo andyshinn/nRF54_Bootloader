@@ -102,7 +102,7 @@ typedef struct
 static uart_control_block_t m_cb[UART_ENABLED_COUNT];
 
 /* nRF54L IRQ handler mapping */
-#define UART0_IRQHandler  SERIAL00_IRQHandler
+#define UART0_IRQHandler  BOARD_UARTE_IRQHandler
 #define IRQ_HANDLER(n) void UART##n##_IRQHandler(void)
 
 __STATIC_INLINE void apply_config(nrf_drv_uart_t const * p_instance, nrf_drv_uart_config_t const * p_config)

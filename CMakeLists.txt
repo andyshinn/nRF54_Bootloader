@@ -50,6 +50,8 @@ add_executable(bootloader
   # src
   src/dfu_ble_svc.c
   src/dfu_init.c
+  src/sd_isr.c
+  src/sd_isr.S
   src/flash_nrf5x.c
   src/main.c
   src/screen.c
@@ -58,6 +60,7 @@ add_executable(bootloader
   src/boards/${BOARD}/pinconfig.c
   # nrfx (MDK in bsp/stable/mdk since nrfx 4.x)
   ${NRFX_DIR}/bsp/stable/mdk/system_nrf54l.c
+  ${NRFX_DIR}/drivers/src/nrfx_rramc.c
   # sdk 11
   ${SDK11_DIR}/libraries/bootloader_dfu/bootloader.c
   ${SDK11_DIR}/libraries/bootloader_dfu/bootloader_settings.c
@@ -144,16 +147,9 @@ target_include_directories(bootloader PUBLIC
   ${SDK_DIR}/drivers_nrf/delay
   ${SDK_DIR}/drivers_nrf/common
   ${SDK_DIR}/drivers_nrf/uart
-  # Softdevice
-  ${SOFTDEVICE_DIR}/mbr/headers
   )
 
-# Linker file — selected by MCU_VARIANT and build type
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(LD_FILE ${CMAKE_CURRENT_LIST_DIR}/linker/${MCU_VARIANT}_debug.ld)
-else ()
-  set(LD_FILE ${CMAKE_CURRENT_LIST_DIR}/linker/${MCU_VARIANT}.ld)
-endif ()
+set(LD_FILE ${CMAKE_CURRENT_LIST_DIR}/linker/${MCU_VARIANT}.ld)
 
 target_link_options(bootloader PUBLIC
   "LINKER:--script=${LD_FILE}"
@@ -188,6 +184,8 @@ target_compile_definitions(bootloader PUBLIC
   NRF_APPLICATION
   __START=main
   __STARTUP_CLEAR_BSS
+  __STACK_SIZE=8192
+  __HEAP_SIZE=0
   )
 
 if (SIGNED_FW)
@@ -214,15 +212,15 @@ endif ()
 # nRF54L MCU variant selection
 if (MCU_VARIANT STREQUAL "nrf54l15")
   set(DFU_DEV_REV 54115)
-  set(DFU_APP_DATA_RESERVED 10*4096)
+  set(DFU_APP_DATA_RESERVED 8*4096)
   target_compile_definitions(bootloader PUBLIC NRF54L15_XXAA)
 elseif (MCU_VARIANT STREQUAL "nrf54l10")
   set(DFU_DEV_REV 54110)
-  set(DFU_APP_DATA_RESERVED 2*4096)
+  set(DFU_APP_DATA_RESERVED 8*4096)
   target_compile_definitions(bootloader PUBLIC NRF54L10_XXAA NRF54L15_XXAA)
 elseif (MCU_VARIANT STREQUAL "nrf54l05")
   set(DFU_DEV_REV 54105)
-  set(DFU_APP_DATA_RESERVED 2*4096)
+  set(DFU_APP_DATA_RESERVED 8*4096)
   target_compile_definitions(bootloader PUBLIC NRF54L05_XXAA NRF54L15_XXAA)
 else ()
   message(FATAL_ERROR "Unknown MCU_VARIANT: ${MCU_VARIANT}")
@@ -251,12 +249,9 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   target_compile_definitions(bootloader PUBLIC
     CFG_DEBUG
     SEGGER_RTT_MODE_DEFAULT=SEGGER_RTT_MODE_BLOCK_IF_FIFO_FULL
-    DFU_APP_DATA_RESERVED=0
-    BOOTLOADER_REGION_START=0x16A000
   )
-else ()
-  target_compile_definitions(bootloader PUBLIC DFU_APP_DATA_RESERVED=${DFU_APP_DATA_RESERVED})
 endif ()
+target_compile_definitions(bootloader PUBLIC DFU_APP_DATA_RESERVED=${DFU_APP_DATA_RESERVED})
 
 #----------------------------------
 # ANT_LICENSE_KEY handling

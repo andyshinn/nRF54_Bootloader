@@ -235,7 +235,7 @@ uint32_t dfu_init_prevalidate(uint8_t * p_init_data, uint32_t init_data_len, uin
 	while (i < p_init_packet->softdevice_len)
 	{
 		if (p_init_packet->softdevice[i] == DFU_SOFTDEVICE_ANY ||
-			p_init_packet->softdevice[i] == SD_FWID_GET(MBR_SIZE))
+			p_init_packet->softdevice[i] == SD_FWID_GET(SOFTDEVICE_REGION_START))
 		{
 			// Found a match. Break the loop.
 			break;

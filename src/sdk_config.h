@@ -105,7 +105,7 @@
 #define APP_TIMER_CONFIG_OP_QUEUE_SIZE     10
 #define APP_TIMER_CONFIG_USE_SCHEDULER     1
 #define APP_TIMER_WITH_PROFILER            0
-#define APP_TIMER_CONFIG_SWI_NUMBER        0
+#define APP_TIMER_CONFIG_SWI_NUMBER        3 // SWI00..02 are SoftDevice owned
 
 // <q> APP_TIMER_KEEPS_RTC_ACTIVE - Enable RTC always on
 // <i> If option is enabled RTC is kept running even if there is no active timers.

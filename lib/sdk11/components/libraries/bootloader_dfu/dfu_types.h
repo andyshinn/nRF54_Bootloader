@@ -62,9 +62,6 @@
 #define MBR_SIZE  (0x1000)
 #endif
 
-#ifndef SOFTDEVICE_INFO_STRUCT_ADDRESS
-#define SOFTDEVICE_INFO_STRUCT_ADDRESS  SOFTDEVICE_INFO_STRUCT_OFFSET
-#endif
 
 /* nRF54L has no MBR SVC for VTOR — write the register directly */
 static inline uint32_t sd_softdevice_vector_table_base_set(uint32_t addr)
@@ -72,6 +69,33 @@ static inline uint32_t sd_softdevice_vector_table_base_set(uint32_t addr)
     *(volatile uint32_t *)0xE000ED08UL = addr;
     return 0; /* NRF_SUCCESS */
 }
+
+
+// Application address is either after MBR or SD (if existed)
+
+#define CODE_PAGE_SIZE                      0x1000                      /**< Size of a flash codepage. Used for size of the reserved flash space in the bootloader region. Will be runtime checked against NRF_UICR->CODEPAGESIZE to ensure the region is correct. */
+
+/* Check smaller variants first — L10/L05 also define NRF54L15_XXAA
+ * for header compatibility, so L15 must be the fallback. */
+// nRF54L layout (no MBR): bootloader at 0x0, application at 0x8000, settings page just below
+// the SoftDevice which sits at the top of RRAM. The region between the application start and
+// the settings page is what DFU may write.
+#define BOOTLOADER_REGION_START             0x00000000
+#define CODE_REGION_1_START                 0x00008000
+#if defined(NRF54L05_XXAA)
+  #define SOFTDEVICE_REGION_START           0x00058C00
+  #define BOOTLOADER_SETTINGS_ADDRESS       0x0004F000
+#elif defined(NRF54L10_XXAA)
+  #define SOFTDEVICE_REGION_START           0x000D8C00
+  #define BOOTLOADER_SETTINGS_ADDRESS       0x000CF000
+#elif defined(NRF54L15_XXAA)
+  #define SOFTDEVICE_REGION_START           0x00158C00
+  #define BOOTLOADER_SETTINGS_ADDRESS       0x0014F000
+#else
+  #error "No nRF54L target defined"
+#endif
+#define DFU_APP_REGION_END                  BOOTLOADER_SETTINGS_ADDRESS
+#define SOFTDEVICE_INFO_STRUCT_ADDRESS      (SOFTDEVICE_REGION_START + SOFTDEVICE_INFO_STRUCT_OFFSET)
 
 #ifndef SD_MAGIC_NUMBER
 #define SD_MAGIC_NUMBER 0x51B1E5DB
@@ -82,46 +106,8 @@ static inline bool is_sd_existed(void)
   return *((uint32_t*)(SOFTDEVICE_INFO_STRUCT_ADDRESS+4)) == SD_MAGIC_NUMBER;
 }
 
-#define NRF_UICR_BOOT_START_ADDRESS         (NRF_UICR_BASE + 0x14)      /**< Register where the bootloader start address is stored in the UICR register. */
-#define NRF_UICR_MBR_PARAMS_PAGE_ADDRESS    (NRF_UICR_BASE + 0x18)      /**< Register where the mbr params page is stored in the UICR register. */
 
-// Application address is either after MBR or SD (if existed)
-#define CODE_REGION_1_START                 (is_sd_existed() ? SD_SIZE_GET(MBR_SIZE) : MBR_SIZE)       /**< This field should correspond to the size of Code Region 0, (which is identical to Start of Code Region 1), found in UICR.CLEN0 register. This value is used for compile safety, as the linker will fail if application expands into bootloader. Runtime, the bootloader will use the value found in UICR.CLEN0. */
-
-#define SOFTDEVICE_REGION_START             MBR_SIZE                    /**< This field should correspond to start address of the bootloader, found in UICR.RESERVED, 0x10001014, register. This value is used for sanity check, so the bootloader will fail immediately if this value differs from runtime value. The value is used to determine max application size for updating. */
-#define CODE_PAGE_SIZE                      0x1000                      /**< Size of a flash codepage. Used for size of the reserved flash space in the bootloader region. Will be runtime checked against NRF_UICR->CODEPAGESIZE to ensure the region is correct. */
-
-/* Check smaller variants first — L10/L05 also define NRF54L15_XXAA
- * for header compatibility, so L15 must be the fallback. */
-#if defined(NRF54L05_XXAA)
-  // nRF54L05: RRAM = 512 KB
-  #ifndef BOOTLOADER_REGION_START
-  #define BOOTLOADER_REGION_START             0x00050000
-  #endif
-  #define BOOTLOADER_MBR_PARAMS_PAGE_ADDRESS  0x0007E000
-  #define BOOTLOADER_SETTINGS_ADDRESS         0x0007F000
-
-#elif defined(NRF54L10_XXAA)
-  // nRF54L10: RRAM = 1 MB
-  #ifndef BOOTLOADER_REGION_START
-  #define BOOTLOADER_REGION_START             0x000D0000
-  #endif
-  #define BOOTLOADER_MBR_PARAMS_PAGE_ADDRESS  0x000FE000
-  #define BOOTLOADER_SETTINGS_ADDRESS         0x000FF000
-
-#elif defined(NRF54L15_XXAA)
-  // nRF54L15: RRAM = 1.5 MB
-  #ifndef BOOTLOADER_REGION_START
-  #define BOOTLOADER_REGION_START             0x00150000
-  #endif
-  #define BOOTLOADER_MBR_PARAMS_PAGE_ADDRESS  0x0017E000
-  #define BOOTLOADER_SETTINGS_ADDRESS         0x0017F000
-
-#else
-  #error "No nRF54L target defined"
-#endif
-
-#define DFU_REGION_TOTAL_SIZE           (BOOTLOADER_REGION_START - CODE_REGION_1_START)                 /**< Total size of the region between SD and Bootloader. */
+#define DFU_REGION_TOTAL_SIZE           (DFU_APP_REGION_END - CODE_REGION_1_START)                 /**< Total size of the region between SD and Bootloader. */
 
 #ifndef DFU_APP_DATA_RESERVED
   #error "DFU_APP_DATA_RESERVED is not defined"
@@ -131,7 +117,7 @@ static inline bool is_sd_existed(void)
 #define DFU_IMAGE_MAX_SIZE_BANKED       (((DFU_IMAGE_MAX_SIZE_FULL) - \
                                         (DFU_IMAGE_MAX_SIZE_FULL % (2 * CODE_PAGE_SIZE)))/2)            /**< Maximum size of an application, excluding save data from the application. */
 
-#define DFU_BL_IMAGE_MAX_SIZE           (BOOTLOADER_MBR_PARAMS_PAGE_ADDRESS - BOOTLOADER_REGION_START)  /**< Maximum size of a bootloader, excluding save data from the current bootloader. */
+#define DFU_BL_IMAGE_MAX_SIZE           (CODE_REGION_1_START - BOOTLOADER_REGION_START)  /**< Maximum size of a bootloader, excluding save data from the current bootloader. */
 #define DFU_BANK_0_REGION_START         CODE_REGION_1_START                                             /**< Bank 0 region start. */
 #define DFU_BANK_1_REGION_START         (DFU_BANK_0_REGION_START + DFU_IMAGE_MAX_SIZE_BANKED)           /**< Bank 1 region start. */
 

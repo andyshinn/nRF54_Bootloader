@@ -58,7 +58,7 @@
 
 static __INLINE uint32_t pstorage_flash_page_end()
 {
-   return BOOTLOADER_REGION_START / PSTORAGE_FLASH_PAGE_SIZE;
+   return (BOOTLOADER_SETTINGS_ADDRESS + PSTORAGE_FLASH_PAGE_SIZE) / PSTORAGE_FLASH_PAGE_SIZE;
 }
 
 #define PSTORAGE_FLASH_PAGE_END     pstorage_flash_page_end()
