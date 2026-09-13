@@ -1,6 +1,22 @@
 # Changelog
 
-## 0.1.0 â€” 2026-05-13
+## 0.2.0 — 2026-09-13
+
+Ported to the s145 SoftDevice layout on nRF54L, verified on the XIAO nRF54L15.
+
+- Bootloader owns RRAM 0x0 and the vector table (no MBR); application at
+  0x8000, settings page just below the SoftDevice, CF2 config at 0x7C00
+- SoftDevice interrupt and SVC forwarding to the handler table at the s145 base
+- RRAM writes through nrfx_rramc while the SoftDevice is off, `sd_flash_write`
+  while it is on; page erase emulated with an all-ones write
+- BLE OTA: SoftDevice enabled with a valid LF clock config and a CRACEN seed
+- Serial DFU on the board console UARTE20, verified with adafruit-nrfutil
+- Bootloader NOINIT peer data and the double-reset marker at the top of RAM
+- LF clock stopped at hand-over so the application can pick its own source
+- MBR commands report NOT_SUPPORTED: SoftDevice and bootloader self-update are
+  not available
+
+## 0.1.0 — 2026-05-13
 
 Initial release. Adafruit-style DFU bootloader ported to the Nordic
 nRF54L series (nRF54L05, nRF54L10, nRF54L15) with SoftDevice S145
@@ -10,7 +26,7 @@ v9.0.0.
 XIAO nRF54L15, XIAO nRF54L15 Sense.
 
 **Transports:** DFU over serial (UART) and OTA (BLE). No UF2 / USB-CDC
-â€” nRF54L has no USB peripheral.
+— nRF54L has no USB peripheral.
 
 **Companion packages:**
 - PlatformIO platform: [caveman99/platform-nordicnrf54](https://github.com/caveman99/platform-nordicnrf54)
