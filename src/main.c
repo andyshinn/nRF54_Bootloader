@@ -313,6 +313,9 @@ static void check_dfu_mode(void) {
     (*dbl_reset_mem) = 0;
   }
 
+  // BLE needs a SoftDevice; without one serial DFU is the only way back in
+  if (!is_sd_existed()) _ota_dfu = false;
+
   // Enter DFU mode accordingly to input
   if (dfu_start || !valid_app) {
     if (_ota_dfu) {
