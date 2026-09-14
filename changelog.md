@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 — 2026-09-14
+
+- Documentation describes the s145 layout, the button handling per board and
+  the CMake build; the Make build, `board.mk` files and the UF2 tooling are
+  gone
+- Display, NeoPixel and APA102 status LED code removed, no nRF54L board has
+  them
+
 ## 0.2.0 — 2026-09-13
 
 Ported to the s145 SoftDevice layout on nRF54L, verified on the XIAO nRF54L15.
