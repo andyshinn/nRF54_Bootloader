@@ -46,9 +46,6 @@
 #endif
 
 // Internal status colors are masked by this brightness setting.
-#ifndef BOARD_RGB_BRIGHTNESS
-#define BOARD_RGB_BRIGHTNESS 0x101010
-#endif
 
 // Helper function
 #define memclr(buffer, size)                memset(buffer, 0, size)
@@ -93,16 +90,6 @@ bool button_pressed(uint32_t pin);
 bool is_ota(void);
 
 //--------------------------------------------------------------------+
-// Display
-//--------------------------------------------------------------------+
-#ifdef DISPLAY_PIN_SCK
-void board_display_init(void);
-void board_display_teardown(void);
-void board_display_draw_line(uint16_t y, uint8_t const* buf, size_t nbytes);
-void screen_draw_drag(void);
-#endif
-
-//--------------------------------------------------------------------+
 // DEBUG
 //--------------------------------------------------------------------+
 
@@ -136,6 +123,5 @@ void screen_draw_drag(void);
 #define PRINT_BUFFER(buf, n)
 
 #endif
-
 
 #endif

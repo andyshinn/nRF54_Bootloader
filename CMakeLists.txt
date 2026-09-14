@@ -54,8 +54,6 @@ add_executable(bootloader
   src/sd_isr.S
   src/flash_nrf5x.c
   src/main.c
-  src/screen.c
-  src/images.c
   src/boards/boards.c
   src/boards/${BOARD}/pinconfig.c
   # nrfx (MDK in bsp/stable/mdk since nrfx 4.x)
