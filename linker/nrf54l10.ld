@@ -45,8 +45,13 @@ SECTIONS
 
   .noinit(NOLOAD) :
   {
+    /* The application hands over the peer data followed by its CRC; keep that order */
+    KEEP(*(.noinit.peer_data))
+    __peer_data_crc = .;
+    KEEP(*(.noinit.peer_data_crc))
     *(.noinit*)
   } > NOINIT
+  ASSERT(__peer_data_crc == ORIGIN(NOINIT) + 60, "DFU peer data CRC must follow the 60-byte peer data")
 }
 
 INCLUDE "nrf_common.ld"

@@ -48,8 +48,8 @@
   static uint16_t            m_peer_data_crc __attribute__((section("NoInit"), zero_init));        /**< CRC variable to ensure the integrity of the peer data provided. */
 
 #elif defined ( __GNUC__ )
-  __attribute__((section(".noinit"))) static dfu_ble_peer_data_t m_peer_data;                      /**< This variable should be placed in a non initialized RAM section in order to be valid upon soft reset from application into bootloader. */
-  __attribute__((section(".noinit"))) static uint16_t            m_peer_data_crc;                  /**< CRC variable to ensure the integrity of the peer data provided. */
+  __attribute__((section(".noinit.peer_data"))) static dfu_ble_peer_data_t m_peer_data;                    /**< This variable should be placed in a non initialized RAM section in order to be valid upon soft reset from application into bootloader. */
+  __attribute__((section(".noinit.peer_data_crc"))) static uint16_t    m_peer_data_crc;                /**< CRC variable to ensure the integrity of the peer data provided. */
 
 #elif defined ( __ICCARM__ )
   __no_init static dfu_ble_peer_data_t m_peer_data     @ 0x20003F80;                               /**< This variable should be placed in a non initialized RAM section in order to be valid upon soft reset from application into bootloader. */
