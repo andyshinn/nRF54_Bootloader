@@ -23,6 +23,8 @@ MEMORY
 
 SECTIONS
 {
+  __dbl_reset_mem = ORIGIN(DBL_RESET);
+
   .fs_data_out ALIGN(4):
   {
     PROVIDE( __start_fs_data = .);
