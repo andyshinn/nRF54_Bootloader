@@ -30,4 +30,4 @@ If GitHub tag-protection rules are added, `github-actions[bot]` needs permission
 
 # Adding a new board
 
-The CI matrix is derived from `src/boards/*`. Adding `src/boards/<new>/` (with the standard `board.h`, `board.cmake`, `board.mk`, `pinconfig.c`) automatically schedules a build for it. A matching `boards/<new>.json` must be added to the platform repo for PlatformIO consumers to use it.
+The CI matrix is derived from `src/boards/*`. Adding `src/boards/<new>/` (with the standard `board.h`, `board.cmake`, `pinconfig.c`) automatically schedules a build for it. The build is CMake only. A matching `boards/<new>.json` must be added to the platform repo for PlatformIO consumers to use it.

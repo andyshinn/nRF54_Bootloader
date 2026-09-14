@@ -1,1 +1,0 @@
-MCU_SUB_VARIANT = nrf54l10

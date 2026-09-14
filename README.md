@@ -17,40 +17,64 @@ Based on the Nordic nRF5 SDK bootloader architecture, ported to nRF54L with Soft
 ## Features
 
 - DFU over Serial (UART) and OTA (BLE)
-- Self-upgradable via Serial and OTA (bootloader + SoftDevice)
 - Dual bank firmware updates (disabled by default)
 - Signed firmware updates (disabled by default)
 - Watchdog feed-through during DFU
 
-Note: nRF54L has no USB peripheral, so there is no UF2 or CDC support.
+Not available: UF2 and USB CDC (nRF54L has no USB peripheral), and
+SoftDevice or bootloader self-update (s145 has no MBR, the MBR commands
+report `NRF_ERROR_NOT_SUPPORTED`).
+
+## Memory layout
+
+The bootloader owns RRAM `0x0` and the reset vector; the application has
+its own vector table at `0x8000` and forwards the SoftDevice interrupts.
+
+| Region | nRF54L05 | nRF54L10 | nRF54L15 |
+|--------|----------|----------|----------|
+| Bootloader | `0x0 – 0x7C00` | `0x0 – 0x7C00` | `0x0 – 0x7C00` |
+| CF2 config | `0x7C00` | `0x7C00` | `0x7C00` |
+| Application | `0x8000 – 0x47000` | `0x8000 – 0xC7000` | `0x8000 – 0x147000` |
+| Bootloader settings page | `0x4F000` | `0xCF000` | `0x14F000` |
+| SoftDevice s145 | `0x58C00` | `0xD8C00` | `0x158C00` |
+
+RAM: `0x20000000 – 0x20004800` SoftDevice, bootloader and application from
+`0x20004800`; the last 128 bytes (`0x2003FF80`) hold the BLE peer data and
+the double-reset marker.
 
 ## How to use
 
-The bootloader checks two pins on reset:
+The bootloader checks the board buttons on reset:
 
-- **DFU = LOW**, **FRST = HIGH**: Enter serial DFU mode
-- **DFU = LOW**, **FRST = LOW**: Enter OTA DFU mode (for Nordic nRF Connect/Toolbox)
-- **DFU = HIGH**, **FRST = HIGH**: Boot application if present, otherwise enter DFU
-- **Double Reset** within 500 ms: Enter DFU mode
+- **DFU button held**: enter serial DFU mode
+- **DFU and OTA buttons held**: enter OTA DFU mode (for Nordic nRF Connect/Toolbox)
+- otherwise: boot the application if present, else enter DFU
+- **Double reset** within 500 ms: enter DFU mode
 
-On the nRF54L15-DK, `DFU` is **Button1** and `FRST` is **Button2**.
+On the nRF54L15-DK, `DFU` is **Button1** and `OTA` is **Button2**. The XIAO
+boards only have the user button (`DFU`); use `GPREGRET` for OTA.
 
 The application can also trigger DFU via the `GPREGRET` register:
 
 ```c
 void reset_to_dfu(void) {
-    NRF_POWER->GPREGRET = 0x4e; // 0xA8 for OTA
+    NRF_POWER->GPREGRET[0] = 0x4e; // 0xA8 for OTA
     NVIC_SystemReset();
 }
 ```
+
+Serial DFU runs on the board console UART (UARTE20, the SAMD11 bridge on
+the XIAO, VCOM0 on the DK) at 115200 baud and waits 3 s for the first
+packet when entered through `GPREGRET`.
 
 ## Building
 
 ### Prerequisites
 
 - ARM GCC toolchain (12.x or later)
-- CMake 3.17+
-- Nordic [nRF Command Line Tools](https://www.nordicsemi.com/Software-and-Tools/Development-Tools/nRF-Command-Line-Tools) (for flashing)
+- CMake 3.17+ and Ninja
+- Nordic [nRF Command Line Tools](https://www.nordicsemi.com/Software-and-Tools/Development-Tools/nRF-Command-Line-Tools) or [pyocd](https://pyocd.io) for flashing
+- [adafruit-nrfutil](https://github.com/adafruit/Adafruit_nRF52_nrfutil) for serial DFU
 
 ### Clone
 
@@ -58,45 +82,37 @@ void reset_to_dfu(void) {
 git clone --recurse-submodules https://github.com/caveman99/nRF54_Bootloader.git
 ```
 
-### Build with CMake
+### Build
 
 ```bash
-cmake -B _build -DBOARD=nrf54l15dk -DCMAKE_BUILD_TYPE=MinSizeRel
+cmake -G Ninja -B _build -DBOARD=nrf54l15dk -DCMAKE_BUILD_TYPE=MinSizeRel
 cmake --build _build
 ```
 
 Output: `_build/bootloader.hex`
 
-### Build with Make
-
-```bash
-make BOARD=nrf54l15dk all
-```
-
 ### Flash
 
-Flash bootloader via J-Link:
+With nrfjprog (J-Link):
 
 ```bash
-make BOARD=nrf54l15dk flash
+cmake --build _build --target flash-all   # erase, SoftDevice, bootloader
+cmake --build _build --target flash-bootloader
+cmake --build _build --target flash-sd
 ```
 
-Flash SoftDevice:
+With pyocd (CMSIS-DAP, e.g. the XIAO's SAMD11 bridge):
 
 ```bash
-make BOARD=nrf54l15dk flash-sd
+pyocd load -t nrf54l --erase chip _build/bootloader.hex
+pyocd load -t nrf54l --erase sector <s145_softdevice.hex>
 ```
 
-DFU via serial:
+### DFU an application over serial
 
 ```bash
-make BOARD=nrf54l15dk SERIAL=/dev/ttyACM0 flash-dfu
-```
-
-If using pyocd:
-
-```bash
-make BOARD=nrf54l15dk FLASHER=pyocd flash
+adafruit-nrfutil dfu genpkg --dev-type 0x0054 --sd-req 0x3024 --application app.hex app_dfu.zip
+adafruit-nrfutil dfu serial --package app_dfu.zip -p /dev/ttyACM0 -b 115200 --singlebank
 ```
 
 ## Build options
@@ -119,19 +135,13 @@ nrfutil keys --show-vk code stored_key.pem
 Build with signing enabled:
 
 ```bash
-make BOARD=nrf54l15dk SIGNED_FW=1 SIGNED_FW_QX='...' SIGNED_FW_QY='...'
+cmake -G Ninja -B _build -DBOARD=nrf54l15dk -DSIGNED_FW=ON -DSIGNED_FW_QX='...' -DSIGNED_FW_QY='...'
 ```
 
 Create a signed DFU package:
 
 ```bash
-nrfutil dfu genpkg --dev-type 0x0054 --sd-req 0x3024 --application app.hex --key-file stored_key.pem app_dfu.zip
-```
-
-Upload via serial:
-
-```bash
-nrfutil dfu serial -pkg app_dfu.zip -p /dev/ttyACM0 -b 115200
+adafruit-nrfutil dfu genpkg --dev-type 0x0054 --sd-req 0x3024 --application app.hex --key-file stored_key.pem app_dfu.zip
 ```
 
 ## Adding a new board
@@ -139,7 +149,6 @@ nrfutil dfu serial -pkg app_dfu.zip -p /dev/ttyACM0 -b 115200
 1. Create `src/boards/<board_name>/` with:
    - `board.h` — pin definitions (LEDs, buttons, UART)
    - `board.cmake` — set `MCU_VARIANT` (nrf54l15, nrf54l10, or nrf54l05)
-   - `board.mk` — set `MCU_SUB_VARIANT`
    - `pinconfig.c` — board metadata
 
 2. Build with `cmake -DBOARD=<board_name> ...`
