@@ -13,10 +13,10 @@
     "nRF54L"
   ],
   "system": "*",
-  "url": "https://github.com/caveman99/nRF54_Bootloader",
+  "url": "https://github.com/meshtastic/nRF54_Bootloader",
   "repository": {
     "type": "git",
-    "url": "https://github.com/caveman99/nRF54_Bootloader.git"
+    "url": "https://github.com/meshtastic/nRF54_Bootloader.git"
   },
   "license": "MIT",
   "version": "0.3.0"

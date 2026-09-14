@@ -1,6 +1,6 @@
 # Repo role
 
-This repo ships as the PlatformIO package `framework-arduinoadafruitnrf54-bootloader`, consumed by [`caveman99/platform-nordicnrf54`](https://github.com/caveman99/platform-nordicnrf54). The root `package.json` is the PlatformIO package manifest — keep `name`, `version`, `system`, and `url` accurate.
+This repo ships as the PlatformIO package `framework-arduinoadafruitnrf54-bootloader`, consumed by [`meshtastic/platform-nordicnrf54`](https://github.com/meshtastic/platform-nordicnrf54). The root `package.json` is the PlatformIO package manifest — keep `name`, `version`, `system`, and `url` accurate.
 
 # Hex layout contract
 

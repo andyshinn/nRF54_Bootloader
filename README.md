@@ -79,7 +79,7 @@ packet when entered through `GPREGRET`.
 ### Clone
 
 ```
-git clone --recurse-submodules https://github.com/caveman99/nRF54_Bootloader.git
+git clone --recurse-submodules https://github.com/meshtastic/nRF54_Bootloader.git
 ```
 
 ### Build
