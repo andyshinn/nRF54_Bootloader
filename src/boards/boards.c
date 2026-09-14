@@ -121,7 +121,7 @@ void board_teardown(void) {
   led_pwm_teardown();
 #endif
 
-  // Stop TIMER20 used by app_timer (nRF54L has no RTC; uses hardware timer)
+  // Stop TIMER21 used by app_timer (nRF54L has no RTC; uses hardware timer)
   app_timer_stop_all();
 
   // Stop the LF clock so the application can pick its own source
