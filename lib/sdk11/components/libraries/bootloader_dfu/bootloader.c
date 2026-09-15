@@ -406,7 +406,8 @@ uint32_t bootloader_dfu_start(bool ota, uint32_t timeout_ms, bool cancel_timeout
 
 void bootloader_app_start(void)
 {
-  for (uint8_t i = 0; i < 8; i++)
+  // nRF54L interrupt numbers go past 240, so clear every NVIC register, not just the first 8
+  for (uint8_t i = 0; i < ARRAY_SIZE(NVIC->ICER); i++)
   {
     NVIC->ICER[i] = 0xFFFFFFFF;
     NVIC->ICPR[i] = 0xFFFFFFFF;

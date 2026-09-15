@@ -12,7 +12,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/src/boards/${BOARD}/board.cmake)
 # nRF54L only: Cortex-M33
 set(CMAKE_SYSTEM_PROCESSOR cortex-m33 CACHE INTERNAL "System Processor")
 
-# MCU_VARIANT is set by board.cmake (nrf54l15, nrf54l10, or nrf54l05)
+# MCU_VARIANT is set by board.cmake (nrf54l15, nrf54l10, nrf54l05 or nrf54lm20a)
 if (NOT DEFINED MCU_VARIANT)
   set(MCU_VARIANT nrf54l15)
 endif ()
@@ -39,9 +39,13 @@ if (NOT DEFINED CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
   set(CMAKE_BUILD_TYPE MinSizeRel CACHE STRING "Build type" FORCE)
 endif ()
 
-# SoftDevice S145 for nRF54L
+# SoftDevice S145 for nRF54L, 10.0.1 is the first release for nRF54LM20A
 if(NOT DEFINED SD_VERSION)
-  set(SD_VERSION 9.0.0)
+  if (MCU_VARIANT STREQUAL "nrf54lm20a")
+    set(SD_VERSION 10.0.1)
+  else ()
+    set(SD_VERSION 9.0.0)
+  endif ()
 endif ()
 
 project(nRF54L_Bootloader C ASM)
@@ -82,8 +86,6 @@ add_executable(bootloader
   ${SDK_DIR}/libraries/uart/app_uart.c
   ${SDK_DIR}/drivers_nrf/uart/nrf_drv_uart.c
   ${SDK_DIR}/drivers_nrf/common/nrf_drv_common.c
-  # startup (canonical nrfx 4.x startup)
-  ${NRFX_DIR}/bsp/stable/mdk/gcc_startup_nrf54l15_application.S
   )
 
 if (DUALBANK_FW)
@@ -211,18 +213,36 @@ endif ()
 if (MCU_VARIANT STREQUAL "nrf54l15")
   set(DFU_DEV_REV 54115)
   set(DFU_APP_DATA_RESERVED 8*4096)
+  set(MCU_STARTUP nrf54l15)
+  set(SD_CHIP_FAMILY nrf54l)
   target_compile_definitions(bootloader PUBLIC NRF54L15_XXAA)
 elseif (MCU_VARIANT STREQUAL "nrf54l10")
   set(DFU_DEV_REV 54110)
   set(DFU_APP_DATA_RESERVED 8*4096)
+  set(MCU_STARTUP nrf54l15)
+  set(SD_CHIP_FAMILY nrf54l)
   target_compile_definitions(bootloader PUBLIC NRF54L10_XXAA NRF54L15_XXAA)
 elseif (MCU_VARIANT STREQUAL "nrf54l05")
   set(DFU_DEV_REV 54105)
   set(DFU_APP_DATA_RESERVED 8*4096)
+  set(MCU_STARTUP nrf54l15)
+  set(SD_CHIP_FAMILY nrf54l)
   target_compile_definitions(bootloader PUBLIC NRF54L05_XXAA NRF54L15_XXAA)
+elseif (MCU_VARIANT STREQUAL "nrf54lm20a")
+  set(DFU_DEV_REV 54120)
+  set(DFU_APP_DATA_RESERVED 8*4096)
+  set(MCU_STARTUP nrf54lm20a)
+  set(SD_CHIP_FAMILY nrf54lm20)
+  # not paired with NRF54L15_XXAA: nrf.h would pick the nRF54L15 device header
+  target_compile_definitions(bootloader PUBLIC NRF54LM20A_XXAA)
 else ()
   message(FATAL_ERROR "Unknown MCU_VARIANT: ${MCU_VARIANT}")
 endif ()
+
+# startup (canonical nrfx 4.x startup)
+target_sources(bootloader PUBLIC
+  ${NRFX_DIR}/bsp/stable/mdk/gcc_startup_${MCU_STARTUP}_application.S
+  )
 
 if (NOT DEFINED SD_NAME)
   set(SD_NAME s145)
@@ -231,7 +251,6 @@ endif ()
 string(TOUPPER ${SD_NAME} SD_NAME_UPPER)
 target_compile_definitions(bootloader PUBLIC ${SD_NAME_UPPER})
 
-set(SD_CHIP_FAMILY nrf54l)
 set(SD_FILENAME ${SD_NAME}_${SD_CHIP_FAMILY}_${SD_VERSION})
 set(SD_HEX ${SOFTDEVICE_DIR}/${SD_FILENAME}/${SD_FILENAME}_softdevice.hex)
 

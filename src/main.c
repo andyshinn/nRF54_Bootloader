@@ -98,7 +98,6 @@
 #define DFU_DBL_RESET_MAGIC             0x5A1AD5      // SALADS
 #define DFU_DBL_RESET_APP               0x4ee5677e
 #define DFU_DBL_RESET_DELAY             500
-#define DFU_DBL_RESET_MEM               (0x20040000 - 0x08) // see linker DBL_RESET
 
 #define BOOTLOADER_VERSION_REGISTER     NRF_TIMER22->CC[0]
 #define DFU_SERIAL_STARTUP_INTERVAL     1000
@@ -115,7 +114,8 @@
 //--------------------------------------------------------------------+
 //
 //--------------------------------------------------------------------+
-uint32_t* dbl_reset_mem = ((uint32_t*) DFU_DBL_RESET_MEM);
+extern uint32_t __dbl_reset_mem[]; // ORIGIN(DBL_RESET) in the linker script
+uint32_t* dbl_reset_mem = __dbl_reset_mem;
 
 // true if ble, false if serial
 bool _ota_dfu = false;
@@ -312,6 +312,9 @@ static void check_dfu_mode(void) {
   } else {
     (*dbl_reset_mem) = 0;
   }
+
+  // BLE needs a SoftDevice; without one serial DFU is the only way back in
+  if (!is_sd_existed()) _ota_dfu = false;
 
   // Enter DFU mode accordingly to input
   if (dfu_start || !valid_app) {

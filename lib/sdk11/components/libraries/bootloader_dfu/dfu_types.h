@@ -82,7 +82,10 @@ static inline uint32_t sd_softdevice_vector_table_base_set(uint32_t addr)
 // the settings page is what DFU may write.
 #define BOOTLOADER_REGION_START             0x00000000
 #define CODE_REGION_1_START                 0x00008000
-#if defined(NRF54L05_XXAA)
+#if defined(NRF54LM20A_XXAA)
+  #define SOFTDEVICE_REGION_START           0x001DA800
+  #define BOOTLOADER_SETTINGS_ADDRESS       0x001D1000
+#elif defined(NRF54L05_XXAA)
   #define SOFTDEVICE_REGION_START           0x00058C00
   #define BOOTLOADER_SETTINGS_ADDRESS       0x0004F000
 #elif defined(NRF54L10_XXAA)
