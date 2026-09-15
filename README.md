@@ -1,6 +1,6 @@
 # nRF54L Bootloader
 
-BLE DFU bootloader for Nordic nRF54L series (nRF54L15, nRF54L10, nRF54L05).
+BLE DFU bootloader for Nordic nRF54L series (nRF54L15, nRF54L10, nRF54L05, nRF54LM20A).
 
 Based on the Nordic nRF5 SDK bootloader architecture, ported to nRF54L with SoftDevice S145.
 
@@ -13,6 +13,7 @@ Based on the Nordic nRF5 SDK bootloader architecture, ported to nRF54L with Soft
 | nRF54L05-DK | `nrf54l05dk` | nRF54L05 |
 | XIAO nRF54L15 | `xiao_nrf54l15` | nRF54L15 |
 | XIAO nRF54L15 Sense | `xiao_nrf54l15_sense` | nRF54L15 |
+| XIAO nRF54LM20A | `xiao_nrf54lm20a` | nRF54LM20A |
 
 ## Features
 
@@ -30,17 +31,18 @@ report `NRF_ERROR_NOT_SUPPORTED`).
 The bootloader owns RRAM `0x0` and the reset vector; the application has
 its own vector table at `0x8000` and forwards the SoftDevice interrupts.
 
-| Region | nRF54L05 | nRF54L10 | nRF54L15 |
-|--------|----------|----------|----------|
-| Bootloader | `0x0 – 0x7C00` | `0x0 – 0x7C00` | `0x0 – 0x7C00` |
-| CF2 config | `0x7C00` | `0x7C00` | `0x7C00` |
-| Application | `0x8000 – 0x47000` | `0x8000 – 0xC7000` | `0x8000 – 0x147000` |
-| Bootloader settings page | `0x4F000` | `0xCF000` | `0x14F000` |
-| SoftDevice s145 | `0x58C00` | `0xD8C00` | `0x158C00` |
+| Region | nRF54L05 | nRF54L10 | nRF54L15 | nRF54LM20A |
+|--------|----------|----------|----------|------------|
+| Bootloader | `0x0 – 0x7C00` | `0x0 – 0x7C00` | `0x0 – 0x7C00` | `0x0 – 0x7C00` |
+| CF2 config | `0x7C00` | `0x7C00` | `0x7C00` | `0x7C00` |
+| Application | `0x8000 – 0x47000` | `0x8000 – 0xC7000` | `0x8000 – 0x147000` | `0x8000 – 0x1C9000` |
+| Bootloader settings page | `0x4F000` | `0xCF000` | `0x14F000` | `0x1D1000` |
+| SoftDevice s145 | `0x58C00` (9.0.0) | `0xD8C00` (9.0.0) | `0x158C00` (9.0.0) | `0x1DA800` (10.0.1) |
 
 RAM: `0x20000000 – 0x20004800` SoftDevice, bootloader and application from
 `0x20004800`; the last 128 bytes (`0x2003FF80`) hold the BLE peer data and
-the double-reset marker.
+the double-reset marker. nRF54LM20A uses only its first 256 KB RAM block, so
+the addresses match nRF54L15.
 
 ## How to use
 
@@ -115,6 +117,9 @@ adafruit-nrfutil dfu genpkg --dev-type 0x0054 --sd-req 0x3024 --application app.
 adafruit-nrfutil dfu serial --package app_dfu.zip -p /dev/ttyACM0 -b 115200 --singlebank
 ```
 
+`--sd-req` is the SoftDevice FWID: `0x3024` for s145 9.0.0, `0x310D` for
+s145 10.0.1 (nRF54LM20A).
+
 ## Build options
 
 | Option | Default | Description |
@@ -148,7 +153,7 @@ adafruit-nrfutil dfu genpkg --dev-type 0x0054 --sd-req 0x3024 --application app.
 
 1. Create `src/boards/<board_name>/` with:
    - `board.h` — pin definitions (LEDs, buttons, UART)
-   - `board.cmake` — set `MCU_VARIANT` (nrf54l15, nrf54l10, or nrf54l05)
+   - `board.cmake` — set `MCU_VARIANT` (nrf54l15, nrf54l10, nrf54l05 or nrf54lm20a)
    - `pinconfig.c` — board metadata
 
 2. Build with `cmake -DBOARD=<board_name> ...`
