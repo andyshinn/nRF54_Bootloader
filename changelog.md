@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.0 — 2026-09-14
+
+nRF54LM20A support. On the XIAO nRF54LM20A the bootloader starts and answers
+on the serial DFU link; application DFU and BLE OTA are not verified yet.
+
+- nRF54LM20A with SoftDevice s145 10.0.1 and the XIAO nRF54LM20A board: same
+  layout as the other parts, settings page at 0x1D1000, s145 at 0x1DA800,
+  serial DFU on UARTE20
+- app_timer runs on TIMER21; TIMER20 belongs to the SoftDevice
+- Every NVIC register is cleared before the application starts, not just
+  IRQ 0-255
+- DFU peer data is placed ahead of its CRC, as the application writes it, so
+  bonded OTA DFU no longer falls back to unbonded advertising
+- Double-reset marker address comes from the linker script; nRF54L10 and
+  nRF54L05 no longer write past the end of RAM
+- OTA DFU falls back to serial DFU when no SoftDevice is programmed
+- `nrf_nvic.h` and `ble_l2cap.h` shims moved out of the vendored SoftDevice tree
+
 ## 0.3.0 — 2026-09-14
 
 - Documentation describes the s145 layout, the button handling per board and
