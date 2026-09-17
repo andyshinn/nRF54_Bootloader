@@ -46,6 +46,14 @@
 #define DEVICE_NAME                          "AdaDFU"                                                /**< Name of device. Will be included in the advertising data. */
 #endif
 
+/* advertising_init() packs three AD structures, each costing its payload plus 2 bytes of
+ * length/type: flags (1), the complete local name (N) and the 128-bit DFU service UUID (16).
+ * s145 caps legacy advertising data at BLE_GAP_ADV_SET_DATA_SIZE_MAX == 31 (s140 allowed 255),
+ * so N may not exceed 8. Past that advertising_add() silently drops the UUID -- it is added
+ * last -- and DFU hosts that scan for the service stop listing the device. */
+STATIC_ASSERT((1 + 2) + ((sizeof(DEVICE_NAME) - 1) + 2) + (16 + 2) <= BLE_GAP_ADV_SET_DATA_SIZE_MAX,
+              "DEVICE_NAME is too long; the DFU service UUID would be dropped from the advertisement");
+
 #define MIN_CONN_INTERVAL                    (uint16_t)(MSEC_TO_UNITS(15, UNIT_1_25_MS))             /**< Minimum acceptable connection interval (11.25 milliseconds). */
 #define MAX_CONN_INTERVAL                    (uint16_t)(MSEC_TO_UNITS(30, UNIT_1_25_MS))             /**< Maximum acceptable connection interval (15 milliseconds). */
 #define SLAVE_LATENCY                        4                                                       /**< Slave latency. */
