@@ -28,6 +28,7 @@
 //--------------------------------------------------------------------+
 // BLE OTA
 //--------------------------------------------------------------------+
+#define DEVICE_NAME           "XIAODFU"
 #define BLEDIS_MANUFACTURER   "Seeed"
 #define BLEDIS_MODEL          "XIAO nRF54LM20A"
 
