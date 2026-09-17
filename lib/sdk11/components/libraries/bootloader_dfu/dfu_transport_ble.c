@@ -811,6 +811,25 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
                 err_code = sd_ble_gap_conn_param_update(m_conn_handle, &p_conn_params);
                 APP_ERROR_CHECK(err_code);
 
+#if defined(S145)
+                /* The latency negotiated above lets us skip connection events whenever we have
+                 * nothing to send, which is most of a firmware download. Upstream cancelled that
+                 * with BLE_GAP_OPT_LOCAL_CONN_LATENCY; s145 removed it and replaced it with
+                 * BLE_GAP_OPT_SLAVE_LATENCY_DISABLE, which makes us listen on every event
+                 * regardless. Costs power, which the bootloader can afford. Not fatal if it
+                 * fails -- the transfer just runs slower. */
+                ble_opt_t latency_opt;
+                varclr(&latency_opt);
+                latency_opt.gap_opt.slave_latency_disable.conn_handle = m_conn_handle;
+                latency_opt.gap_opt.slave_latency_disable.disable     = BLE_GAP_SLAVE_LATENCY_DISABLE;
+
+                err_code = sd_ble_opt_set(BLE_GAP_OPT_SLAVE_LATENCY_DISABLE, &latency_opt);
+                if (err_code != NRF_SUCCESS)
+                {
+                    PRINTF("Failed to disable slave latency: 0x%08lX\r\n", (unsigned long) err_code);
+                }
+#endif
+
             }
             break;
 
