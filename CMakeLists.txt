@@ -57,8 +57,8 @@ add_executable(bootloader
   src/main.c
   src/boards/boards.c
   src/boards/${BOARD}/pinconfig.c
-  # nrfx (MDK in bsp/stable/mdk since nrfx 4.x)
-  ${NRFX_DIR}/bsp/stable/mdk/system_nrf54l.c
+  # nrfx (since 4.4.0 the MDK is split into per-series/per-SoC directories)
+  ${NRFX_DIR}/bsp/stable/mdk/nrf54l/system_nrf54l.c
   ${NRFX_DIR}/drivers/src/nrfx_rramc.c
   # sdk 11
   ${SDK11_DIR}/libraries/bootloader_dfu/bootloader.c
@@ -113,9 +113,11 @@ target_include_directories(bootloader PUBLIC
   src/boards
   src/boards/${BOARD}
   src/cmsis/include
-  # nrfx 4.2.0 — MDK and soc live under bsp/stable/
+  # nrfx — MDK and soc live under bsp/stable/
   ${NRFX_DIR}
   ${NRFX_DIR}/bsp/stable/mdk
+  ${NRFX_DIR}/bsp/stable/mdk/common
+  ${NRFX_DIR}/bsp/stable/mdk/nrf54l
   ${NRFX_DIR}/hal
   ${NRFX_DIR}/haly
   ${NRFX_DIR}/drivers/include
@@ -151,6 +153,7 @@ set(LD_FILE ${CMAKE_CURRENT_LIST_DIR}/linker/${MCU_VARIANT}.ld)
 target_link_options(bootloader PUBLIC
   "LINKER:--script=${LD_FILE}"
   -L${NRFX_DIR}/bsp/stable/mdk
+  -L${NRFX_DIR}/bsp/stable/mdk/common
   -nostartfiles
   --specs=nosys.specs --specs=nano.specs
   )
@@ -236,9 +239,16 @@ else ()
   message(FATAL_ERROR "Unknown MCU_VARIANT: ${MCU_VARIANT}")
 endif ()
 
+# per-SoC MDK headers; nrfx 4.4.0 split these out of the flat mdk/ directory.
+# nrf54l05/nrf54l10 also define NRF54L15_XXAA, so the startup SoC's headers are needed too.
+target_include_directories(bootloader PUBLIC
+  ${NRFX_DIR}/bsp/stable/mdk/nrf54l/${MCU_VARIANT}
+  ${NRFX_DIR}/bsp/stable/mdk/nrf54l/${MCU_STARTUP}
+  )
+
 # startup (canonical nrfx 4.x startup)
 target_sources(bootloader PUBLIC
-  ${NRFX_DIR}/bsp/stable/mdk/gcc_startup_${MCU_STARTUP}_application.S
+  ${NRFX_DIR}/bsp/stable/mdk/nrf54l/${MCU_STARTUP}/gcc_startup_${MCU_STARTUP}_application.S
   )
 
 if (NOT DEFINED SD_NAME)
