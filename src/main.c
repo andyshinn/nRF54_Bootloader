@@ -478,12 +478,13 @@ static uint32_t ble_stack_init(void) {
   sd_ble_opt_set(BLE_COMMON_OPT_PA_LNA, &opt);
 # endif
 
-  // Set TX power for scan responses
-  sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_SCAN_INIT, 0, RADIO_TXPOWER_TXPOWER_Neg8dBm);
-  
-  // Set TX power for advertisements
-  sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, 0, RADIO_TXPOWER_TXPOWER_Neg8dBm);
-  // (Tx power setting for connections inherit the scan or advertising power setting)
+  // Match the advertising set power used by dfu_transport_ble.c; connection power inherits
+  // from the scan/advertising role. BLE_TX_POWER_DBM is plain dBm -- see boards.h.
+  uint32_t err_code = sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_SCAN_INIT, 0, BLE_TX_POWER_DBM);
+  APP_ERROR_CHECK(err_code);
+
+  err_code = sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, 0, BLE_TX_POWER_DBM);
+  APP_ERROR_CHECK(err_code);
   
 #endif
 

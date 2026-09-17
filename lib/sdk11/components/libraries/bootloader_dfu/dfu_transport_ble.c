@@ -754,7 +754,8 @@ static void advertising_start(void)
     advertising_init(&gap_adv.adv_data, adv_flag);
 
     APP_ERROR_CHECK( sd_ble_gap_adv_set_configure(&_adv_handle, &gap_adv, &m_adv_params) );
-    APP_ERROR_CHECK( sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, _adv_handle, 4) );
+    // Connection TX power inherits the advertising setting, so this covers the whole DFU.
+    APP_ERROR_CHECK( sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, _adv_handle, BLE_TX_POWER_DBM) );
     APP_ERROR_CHECK( sd_ble_gap_adv_start(_adv_handle, BLE_CONN_CFG_HIGH_BANDWIDTH) );
 
     m_is_advertising = true;
