@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+BLE OTA DFU throughput and link reliability, plus a SoftDevice and nrfx
+refresh. Nothing here is verified on hardware yet.
+
+- Slave latency is disabled for the DFU connection with
+  `BLE_GAP_OPT_SLAVE_LATENCY_DISABLE`. The transport still asks the central
+  for latency 4, inherited from nRF52 where it gave the SoftDevice room for
+  slow flash writes; on an inbound firmware download it only let the
+  peripheral sleep through connection events. s145 dropped the
+  `BLE_GAP_OPT_LOCAL_CONN_LATENCY` upstream used to cancel it
+- BLE TX power is set in dBm rather than as a `RADIO_TXPOWER_TXPOWER_*`
+  register value, which asked for +9 dBm on nRF54L and was rejected. New
+  `BLE_TX_POWER_DBM`, default +8 dBm, overridable per board; the advertising
+  set was previously hardcoded to +4 dBm
+- nRF54L05, nRF54L10 and nRF54L15 move from SoftDevice s145 9.0.0 to 10.0.1,
+  matching nRF54LM20A. 10.0.1 ships one hex per SoC, which also fixes
+  nRF54L05 and nRF54L10 being given the nRF54L15 image. The SoftDevice moves
+  to 0x5A800 / 0xDA800 / 0x15A800 and the freed 7 KB goes to the application
+  data region. **The DFU `--sd-req` FWID changes from 0x3024 to 0x310D**
+- XIAO nRF54LM20A advertises as `XIAO_DFU`; a static assertion now enforces
+  the 8-character limit, past which the DFU service UUID was silently
+  dropped from the advertisement
+- nrfx updated to v4.6.0 (MDK 9.1.0)
+
 ## 0.4.0 — 2026-09-14
 
 nRF54LM20A support. On the XIAO nRF54LM20A the bootloader starts and answers
