@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0-dev1 — 2026-09-20
 
 BLE OTA DFU throughput and link reliability, plus a SoftDevice and nrfx
 refresh. Nothing here is verified on hardware yet.
