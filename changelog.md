@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0-dev2 — 2026-09-24
 
 - The DFU button counts as pressed only if it reads active for 50 ms
   (`BUTTON_SETTLE_MS`, overridable per board). It was sampled once, 100 µs
