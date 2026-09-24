@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- The DFU button counts as pressed only if it reads active for 50 ms
+  (`BUTTON_SETTLE_MS`, overridable per board). It was sampled once, 100 µs
+  after its pull-up was enabled, so on power-on the XIAO nRF54LM20A read a
+  still-charging P0.09 as a press and sat in serial DFU until the 6-minute
+  inactivity timeout. A released button still returns as soon as the pin
+  settles
+
 ## 0.5.0-dev1 — 2026-09-20
 
 BLE OTA DFU throughput and link reliability, plus a SoftDevice and nrfx
