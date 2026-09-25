@@ -4,11 +4,12 @@
  * Replaces the SDK's RTC1-based app_timer.c since nRF54L has no RTC
  * (it uses GRTC which has a completely different register interface).
  *
- * Uses TIMER20 in 24-bit mode with prescaler to approximate the 32768 Hz
+ * Uses TIMER21 in 24-bit mode with prescaler to approximate the 32768 Hz
  * tick rate of the original RTC1-based implementation.
  *
- * TIMER20 @ 128 MHz / 2^12 = 31250 Hz (close to 32768 Hz)
+ * TIMER21 @ 128 MHz / 2^12 = 31250 Hz (close to 32768 Hz)
  * Uses CC[0] for compare event, CC[1] for counter capture.
+ * TIMER20 belongs to the SoftDevice (SD_TIMER2X_INSTANCES_USED in nrf_sd_def.h).
  *
  * This is an MVP implementation sufficient for bootloader use:
  * - Single-shot and repeating timers
@@ -32,8 +33,8 @@
 #endif
 
 /* TIMER peripheral used for app_timer */
-#define TIMER_INST          NRF_TIMER20
-#define TIMER_IRQn_INST     TIMER20_IRQn
+#define TIMER_INST          NRF_TIMER21
+#define TIMER_IRQn_INST     TIMER21_IRQn
 #define TIMER_IRQ_PRI       APP_TIMER_CONFIG_IRQ_PRIORITY
 #define SWI_IRQ_PRI         APP_TIMER_CONFIG_IRQ_PRIORITY
 
@@ -535,7 +536,7 @@ static uint32_t timer_stop_op_schedule(timer_node_t * p_node, timer_user_op_type
 
 /*--- IRQ Handlers ---*/
 
-void TIMER20_IRQHandler(void)
+void TIMER21_IRQHandler(void)
 {
     /* Clear compare events */
     nrf_timer_event_clear(TIMER_INST, NRF_TIMER_EVENT_COMPARE0);

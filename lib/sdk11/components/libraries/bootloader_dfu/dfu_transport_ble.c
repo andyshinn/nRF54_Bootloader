@@ -46,6 +46,14 @@
 #define DEVICE_NAME                          "AdaDFU"                                                /**< Name of device. Will be included in the advertising data. */
 #endif
 
+/* advertising_init() packs three AD structures, each costing its payload plus 2 bytes of
+ * length/type: flags (1), the complete local name (N) and the 128-bit DFU service UUID (16).
+ * s145 caps legacy advertising data at BLE_GAP_ADV_SET_DATA_SIZE_MAX == 31 (s140 allowed 255),
+ * so N may not exceed 8. Past that advertising_add() silently drops the UUID -- it is added
+ * last -- and DFU hosts that scan for the service stop listing the device. */
+STATIC_ASSERT((1 + 2) + ((sizeof(DEVICE_NAME) - 1) + 2) + (16 + 2) <= BLE_GAP_ADV_SET_DATA_SIZE_MAX,
+              "DEVICE_NAME is too long; the DFU service UUID would be dropped from the advertisement");
+
 #define MIN_CONN_INTERVAL                    (uint16_t)(MSEC_TO_UNITS(15, UNIT_1_25_MS))             /**< Minimum acceptable connection interval (11.25 milliseconds). */
 #define MAX_CONN_INTERVAL                    (uint16_t)(MSEC_TO_UNITS(30, UNIT_1_25_MS))             /**< Maximum acceptable connection interval (15 milliseconds). */
 #define SLAVE_LATENCY                        4                                                       /**< Slave latency. */
@@ -746,7 +754,8 @@ static void advertising_start(void)
     advertising_init(&gap_adv.adv_data, adv_flag);
 
     APP_ERROR_CHECK( sd_ble_gap_adv_set_configure(&_adv_handle, &gap_adv, &m_adv_params) );
-    APP_ERROR_CHECK( sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, _adv_handle, 4) );
+    // Connection TX power inherits the advertising setting, so this covers the whole DFU.
+    APP_ERROR_CHECK( sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, _adv_handle, BLE_TX_POWER_DBM) );
     APP_ERROR_CHECK( sd_ble_gap_adv_start(_adv_handle, BLE_CONN_CFG_HIGH_BANDWIDTH) );
 
     m_is_advertising = true;
@@ -801,6 +810,25 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 
                 err_code = sd_ble_gap_conn_param_update(m_conn_handle, &p_conn_params);
                 APP_ERROR_CHECK(err_code);
+
+#if defined(S145)
+                /* The latency negotiated above lets us skip connection events whenever we have
+                 * nothing to send, which is most of a firmware download. Upstream cancelled that
+                 * with BLE_GAP_OPT_LOCAL_CONN_LATENCY; s145 removed it and replaced it with
+                 * BLE_GAP_OPT_SLAVE_LATENCY_DISABLE, which makes us listen on every event
+                 * regardless. Costs power, which the bootloader can afford. Not fatal if it
+                 * fails -- the transfer just runs slower. */
+                ble_opt_t latency_opt;
+                varclr(&latency_opt);
+                latency_opt.gap_opt.slave_latency_disable.conn_handle = m_conn_handle;
+                latency_opt.gap_opt.slave_latency_disable.disable     = BLE_GAP_SLAVE_LATENCY_DISABLE;
+
+                err_code = sd_ble_opt_set(BLE_GAP_OPT_SLAVE_LATENCY_DISABLE, &latency_opt);
+                if (err_code != NRF_SUCCESS)
+                {
+                    PRINTF("Failed to disable slave latency: 0x%08lX\r\n", (unsigned long) err_code);
+                }
+#endif
 
             }
             break;

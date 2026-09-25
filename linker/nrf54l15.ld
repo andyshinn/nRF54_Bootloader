@@ -3,8 +3,8 @@
  * s145 has no MBR, so the bootloader owns RRAM 0x0 and the reset vector. Layout:
  *   0x00000000  bootloader (31 KB code + 1 KB CF2 config)
  *   0x00008000  application (own vector table, started by bootloader_app_start)
- *   0x0014f000  bootloader settings page (LittleFS ends one page below)
- *   0x00158c00  SoftDevice s145, up to the end of RRAM
+ *   0x0014f000  bootloader settings page (LittleFS fills the gap up to the SoftDevice)
+ *   0x0015a800  SoftDevice s145, up to the end of RRAM
  * The SoftDevice keeps RAM 0x20000000-0x20004800; the last 128 bytes of RAM hold the
  * double-reset marker and the BLE peer data handed over from the application. */
 SEARCH_DIR(.)
@@ -23,6 +23,8 @@ MEMORY
 
 SECTIONS
 {
+  __dbl_reset_mem = ORIGIN(DBL_RESET);
+
   .fs_data_out ALIGN(4):
   {
     PROVIDE( __start_fs_data = .);
@@ -45,8 +47,13 @@ SECTIONS
 
   .noinit(NOLOAD) :
   {
+    /* The application hands over the peer data followed by its CRC; keep that order */
+    KEEP(*(.noinit.peer_data))
+    __peer_data_crc = .;
+    KEEP(*(.noinit.peer_data_crc))
     *(.noinit*)
   } > NOINIT
+  ASSERT(__peer_data_crc == ORIGIN(NOINIT) + 60, "DFU peer data CRC must follow the 60-byte peer data")
 }
 
 INCLUDE "nrf_common.ld"

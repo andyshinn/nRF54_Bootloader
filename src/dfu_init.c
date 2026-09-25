@@ -89,11 +89,14 @@
  *   - nrf54l15 dev-rev is 54115
  *   - nrf54l10 dev-rev is 54110
  *   - nrf54l05 dev-rev is 54105
+ *   - nrf54lm20a dev-rev is 54120
  */
 #define DFU_DEVICE_TYPE              0x0054
 
 /* Check smaller variants first — L10/L05 also define NRF54L15_XXAA */
-#if defined(NRF54L05_XXAA)
+#if defined(NRF54LM20A_XXAA)
+  #define DFU_DEV_REV                54120
+#elif defined(NRF54L05_XXAA)
   #define DFU_DEV_REV                54105
 #elif defined(NRF54L10_XXAA)
   #define DFU_DEV_REV                54110

@@ -45,6 +45,16 @@
 #define LED_STATE_ON   0
 #endif
 
+// BLE transmit power for the DFU advertisement and connection, in dBm.
+// This is a plain dBm value: sd_ble_gap_tx_power_set() takes int8_t dBm, NOT a
+// RADIO_TXPOWER_TXPOWER_* register enum. On nRF52 those macros happened to encode dBm as
+// two's complement (Neg8dBm == 0xF8 == -8), but on nRF54L they are register values
+// (Neg8dBm == 0x009), so passing one asks for +9 dBm and is rejected.
+// +8 dBm is the maximum on every nRF54L variant.
+#ifndef BLE_TX_POWER_DBM
+#define BLE_TX_POWER_DBM   8
+#endif
+
 // Internal status colors are masked by this brightness setting.
 
 // Helper function

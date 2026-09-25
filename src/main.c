@@ -98,7 +98,6 @@
 #define DFU_DBL_RESET_MAGIC             0x5A1AD5      // SALADS
 #define DFU_DBL_RESET_APP               0x4ee5677e
 #define DFU_DBL_RESET_DELAY             500
-#define DFU_DBL_RESET_MEM               (0x20040000 - 0x08) // see linker DBL_RESET
 
 #define BOOTLOADER_VERSION_REGISTER     NRF_TIMER22->CC[0]
 #define DFU_SERIAL_STARTUP_INTERVAL     1000
@@ -115,7 +114,8 @@
 //--------------------------------------------------------------------+
 //
 //--------------------------------------------------------------------+
-uint32_t* dbl_reset_mem = ((uint32_t*) DFU_DBL_RESET_MEM);
+extern uint32_t __dbl_reset_mem[]; // ORIGIN(DBL_RESET) in the linker script
+uint32_t* dbl_reset_mem = __dbl_reset_mem;
 
 // true if ble, false if serial
 bool _ota_dfu = false;
@@ -313,6 +313,9 @@ static void check_dfu_mode(void) {
     (*dbl_reset_mem) = 0;
   }
 
+  // BLE needs a SoftDevice; without one serial DFU is the only way back in
+  if (!is_sd_existed()) _ota_dfu = false;
+
   // Enter DFU mode accordingly to input
   if (dfu_start || !valid_app) {
     if (_ota_dfu) {
@@ -475,12 +478,13 @@ static uint32_t ble_stack_init(void) {
   sd_ble_opt_set(BLE_COMMON_OPT_PA_LNA, &opt);
 # endif
 
-  // Set TX power for scan responses
-  sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_SCAN_INIT, 0, RADIO_TXPOWER_TXPOWER_Neg8dBm);
-  
-  // Set TX power for advertisements
-  sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, 0, RADIO_TXPOWER_TXPOWER_Neg8dBm);
-  // (Tx power setting for connections inherit the scan or advertising power setting)
+  // Match the advertising set power used by dfu_transport_ble.c; connection power inherits
+  // from the scan/advertising role. BLE_TX_POWER_DBM is plain dBm -- see boards.h.
+  uint32_t err_code = sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_SCAN_INIT, 0, BLE_TX_POWER_DBM);
+  APP_ERROR_CHECK(err_code);
+
+  err_code = sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, 0, BLE_TX_POWER_DBM);
+  APP_ERROR_CHECK(err_code);
   
 #endif
 

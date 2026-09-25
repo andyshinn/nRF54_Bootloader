@@ -50,9 +50,20 @@ void button_init(uint32_t pin) {
   }
 }
 
+// At power-on the internal pull (~13k) may still be charging the button net when the pin is
+// first read, so it looks pressed. Only report a press if the pin stays active for the whole
+// window; a released button returns as soon as the pin settles.
+#ifndef BUTTON_SETTLE_MS
+#define BUTTON_SETTLE_MS      50
+#endif
+
 bool button_pressed(uint32_t pin) {
   uint32_t const active_state = (BUTTON_PULL == NRF_GPIO_PIN_PULLDOWN ? 1 : 0);
-  return nrf_gpio_pin_read(pin) == active_state;
+  for (uint32_t i = 0; i < BUTTON_SETTLE_MS * 10; i++) {
+    if (nrf_gpio_pin_read(pin) != active_state) return false;
+    NRFX_DELAY_US(100);
+  }
+  return true;
 }
 #endif
 
@@ -76,7 +87,6 @@ void board_init(void) {
 #ifdef BUTTON_DFU_OTA
   button_init(BUTTON_DFU_OTA);
 #endif
-  NRFX_DELAY_US(100); // wait for the pin state is stable
 
 #if LEDS_NUMBER > 0
   // use PMW0 for LED RED
@@ -121,7 +131,7 @@ void board_teardown(void) {
   led_pwm_teardown();
 #endif
 
-  // Stop TIMER20 used by app_timer (nRF54L has no RTC; uses hardware timer)
+  // Stop TIMER21 used by app_timer (nRF54L has no RTC; uses hardware timer)
   app_timer_stop_all();
 
   // Stop the LF clock so the application can pick its own source

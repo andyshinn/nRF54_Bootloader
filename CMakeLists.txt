@@ -12,7 +12,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/src/boards/${BOARD}/board.cmake)
 # nRF54L only: Cortex-M33
 set(CMAKE_SYSTEM_PROCESSOR cortex-m33 CACHE INTERNAL "System Processor")
 
-# MCU_VARIANT is set by board.cmake (nrf54l15, nrf54l10, or nrf54l05)
+# MCU_VARIANT is set by board.cmake (nrf54l15, nrf54l10, nrf54l05 or nrf54lm20a)
 if (NOT DEFINED MCU_VARIANT)
   set(MCU_VARIANT nrf54l15)
 endif ()
@@ -39,9 +39,10 @@ if (NOT DEFINED CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
   set(CMAKE_BUILD_TYPE MinSizeRel CACHE STRING "Build type" FORCE)
 endif ()
 
-# SoftDevice S145 for nRF54L
+# SoftDevice S145 for nRF54L. 10.0.1 ships a separate hex per SoC, so SD_CHIP below is the
+# SoC name rather than a family name.
 if(NOT DEFINED SD_VERSION)
-  set(SD_VERSION 9.0.0)
+  set(SD_VERSION 10.0.1)
 endif ()
 
 project(nRF54L_Bootloader C ASM)
@@ -56,8 +57,8 @@ add_executable(bootloader
   src/main.c
   src/boards/boards.c
   src/boards/${BOARD}/pinconfig.c
-  # nrfx (MDK in bsp/stable/mdk since nrfx 4.x)
-  ${NRFX_DIR}/bsp/stable/mdk/system_nrf54l.c
+  # nrfx (since 4.4.0 the MDK is split into per-series/per-SoC directories)
+  ${NRFX_DIR}/bsp/stable/mdk/nrf54l/system_nrf54l.c
   ${NRFX_DIR}/drivers/src/nrfx_rramc.c
   # sdk 11
   ${SDK11_DIR}/libraries/bootloader_dfu/bootloader.c
@@ -82,8 +83,6 @@ add_executable(bootloader
   ${SDK_DIR}/libraries/uart/app_uart.c
   ${SDK_DIR}/drivers_nrf/uart/nrf_drv_uart.c
   ${SDK_DIR}/drivers_nrf/common/nrf_drv_common.c
-  # startup (canonical nrfx 4.x startup)
-  ${NRFX_DIR}/bsp/stable/mdk/gcc_startup_nrf54l15_application.S
   )
 
 if (DUALBANK_FW)
@@ -114,9 +113,11 @@ target_include_directories(bootloader PUBLIC
   src/boards
   src/boards/${BOARD}
   src/cmsis/include
-  # nrfx 4.2.0 — MDK and soc live under bsp/stable/
+  # nrfx — MDK and soc live under bsp/stable/
   ${NRFX_DIR}
   ${NRFX_DIR}/bsp/stable/mdk
+  ${NRFX_DIR}/bsp/stable/mdk/common
+  ${NRFX_DIR}/bsp/stable/mdk/nrf54l
   ${NRFX_DIR}/hal
   ${NRFX_DIR}/haly
   ${NRFX_DIR}/drivers/include
@@ -152,6 +153,7 @@ set(LD_FILE ${CMAKE_CURRENT_LIST_DIR}/linker/${MCU_VARIANT}.ld)
 target_link_options(bootloader PUBLIC
   "LINKER:--script=${LD_FILE}"
   -L${NRFX_DIR}/bsp/stable/mdk
+  -L${NRFX_DIR}/bsp/stable/mdk/common
   -nostartfiles
   --specs=nosys.specs --specs=nano.specs
   )
@@ -211,18 +213,43 @@ endif ()
 if (MCU_VARIANT STREQUAL "nrf54l15")
   set(DFU_DEV_REV 54115)
   set(DFU_APP_DATA_RESERVED 8*4096)
+  set(MCU_STARTUP nrf54l15)
+  set(SD_CHIP nrf54l15)
   target_compile_definitions(bootloader PUBLIC NRF54L15_XXAA)
 elseif (MCU_VARIANT STREQUAL "nrf54l10")
   set(DFU_DEV_REV 54110)
   set(DFU_APP_DATA_RESERVED 8*4096)
+  set(MCU_STARTUP nrf54l15)
+  set(SD_CHIP nrf54l10)
   target_compile_definitions(bootloader PUBLIC NRF54L10_XXAA NRF54L15_XXAA)
 elseif (MCU_VARIANT STREQUAL "nrf54l05")
   set(DFU_DEV_REV 54105)
   set(DFU_APP_DATA_RESERVED 8*4096)
+  set(MCU_STARTUP nrf54l15)
+  set(SD_CHIP nrf54l05)
   target_compile_definitions(bootloader PUBLIC NRF54L05_XXAA NRF54L15_XXAA)
+elseif (MCU_VARIANT STREQUAL "nrf54lm20a")
+  set(DFU_DEV_REV 54120)
+  set(DFU_APP_DATA_RESERVED 8*4096)
+  set(MCU_STARTUP nrf54lm20a)
+  set(SD_CHIP nrf54lm20)
+  # not paired with NRF54L15_XXAA: nrf.h would pick the nRF54L15 device header
+  target_compile_definitions(bootloader PUBLIC NRF54LM20A_XXAA)
 else ()
   message(FATAL_ERROR "Unknown MCU_VARIANT: ${MCU_VARIANT}")
 endif ()
+
+# per-SoC MDK headers; nrfx 4.4.0 split these out of the flat mdk/ directory.
+# nrf54l05/nrf54l10 also define NRF54L15_XXAA, so the startup SoC's headers are needed too.
+target_include_directories(bootloader PUBLIC
+  ${NRFX_DIR}/bsp/stable/mdk/nrf54l/${MCU_VARIANT}
+  ${NRFX_DIR}/bsp/stable/mdk/nrf54l/${MCU_STARTUP}
+  )
+
+# startup (canonical nrfx 4.x startup)
+target_sources(bootloader PUBLIC
+  ${NRFX_DIR}/bsp/stable/mdk/nrf54l/${MCU_STARTUP}/gcc_startup_${MCU_STARTUP}_application.S
+  )
 
 if (NOT DEFINED SD_NAME)
   set(SD_NAME s145)
@@ -231,8 +258,7 @@ endif ()
 string(TOUPPER ${SD_NAME} SD_NAME_UPPER)
 target_compile_definitions(bootloader PUBLIC ${SD_NAME_UPPER})
 
-set(SD_CHIP_FAMILY nrf54l)
-set(SD_FILENAME ${SD_NAME}_${SD_CHIP_FAMILY}_${SD_VERSION})
+set(SD_FILENAME ${SD_NAME}_${SD_CHIP}_${SD_VERSION})
 set(SD_HEX ${SOFTDEVICE_DIR}/${SD_FILENAME}/${SD_FILENAME}_softdevice.hex)
 
 target_compile_definitions(bootloader PUBLIC ${SD_NAME_UPPER})
