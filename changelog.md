@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0 — 2026-09-24
+
+Promotes 0.5.0-dev1 and 0.5.0-dev2 to a release. No changes since
+0.5.0-dev2.
+
 ## 0.5.0-dev2 — 2026-09-24
 
 - The DFU button counts as pressed only if it reads active for 50 ms
