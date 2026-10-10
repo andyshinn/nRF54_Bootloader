@@ -67,9 +67,13 @@
 #include "nrf_cracen.h"
 #include "nrf_cracen_rng.h"
 
-/* nRF54L has no USB peripheral — serial DFU uses UART only */
+#ifdef USB_DFU
+#include "usb.h"
+#else
+/* Serial DFU over UART: no USB peripheral, or the board does not use it */
 #define usb_init(x)       led_state(STATE_USB_MOUNTED)
 #define usb_teardown()
+#endif
 
 /*
  * Blinking patterns:
@@ -83,7 +87,8 @@
 /* Magic that written to NRF_POWER->GPREGRET by application when it wish to go into DFU
  * - DFU_MAGIC_OTA_APPJUM        : used by BLEDfu service, SD is already inited
  * - DFU_MAGIC_OTA_RESET         : entered by soft reset, SD is not inited yet
- * - DFU_MAGIC_SERIAL_ONLY_RESET : serial DFU only (UART)
+ * - DFU_MAGIC_SERIAL_ONLY_RESET : serial DFU only (UART, or CDC only on USB)
+ * - DFU_MAGIC_UF2_RESET         : with CDC and MSC interfaces (USB), serial DFU over UART otherwise
  * - DFU_MAGIC_SKIP              : skip DFU entirely including double reset delay,
  *                                 Can be used with systemoff or quick reset to app
  *
@@ -93,6 +98,7 @@
 #define DFU_MAGIC_OTA_APPJUM            BOOTLOADER_DFU_START  // 0xB1
 #define DFU_MAGIC_OTA_RESET             0xA8
 #define DFU_MAGIC_SERIAL_ONLY_RESET     0x4e
+#define DFU_MAGIC_UF2_RESET             0x57
 #define DFU_MAGIC_SKIP                  0x6d
 
 #define DFU_DBL_RESET_MAGIC             0x5A1AD5      // SALADS
@@ -249,12 +255,13 @@ static void check_dfu_mode(void) {
 
   // Serial only mode
   bool const serial_only_dfu = (gpregret == DFU_MAGIC_SERIAL_ONLY_RESET);
+  bool const uf2_dfu         = (gpregret == DFU_MAGIC_UF2_RESET);
   bool const dfu_skip        = (gpregret == DFU_MAGIC_SKIP);
 
   bool const reason_reset_pin = (NRF_RESET->RESETREAS & RESET_RESETREAS_RESETPIN_Msk) ? true : false;
 
-  // start either serial or ble
-  bool dfu_start = _ota_dfu || serial_only_dfu ||
+  // start either serial, uf2 or ble
+  bool dfu_start = _ota_dfu || serial_only_dfu || uf2_dfu ||
                    (((*dbl_reset_mem) == DFU_DBL_RESET_MAGIC) && reason_reset_pin);
 
   // Clear GPREGRET if it is our values

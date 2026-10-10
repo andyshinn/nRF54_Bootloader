@@ -14,17 +14,22 @@ Based on the Nordic nRF5 SDK bootloader architecture, ported to nRF54L with Soft
 | XIAO nRF54L15 | `xiao_nrf54l15` | nRF54L15 |
 | XIAO nRF54L15 Sense | `xiao_nrf54l15_sense` | nRF54L15 |
 | XIAO nRF54LM20A | `xiao_nrf54lm20a` | nRF54LM20A |
+| nRF54LM20-DK | `nrf54lm20dk` | nRF54LM20B (built as nRF54LM20A) |
 
 ## Features
 
 - DFU over Serial (UART) and OTA (BLE)
+- DFU over USB (CDC) and a UF2 drive on boards that use the nRF54LM20 USB
+  port (nRF54LM20-DK)
 - Dual bank firmware updates (disabled by default)
 - Signed firmware updates (disabled by default)
 - Watchdog feed-through during DFU
 
-Not available: UF2 and USB CDC (nRF54L has no USB peripheral), and
-SoftDevice or bootloader self-update (s145 has no MBR, the MBR commands
-report `NRF_ERROR_NOT_SUPPORTED`).
+Not available: UF2 and USB CDC on boards without a USB port (nRF54L15,
+nRF54L10 and nRF54L05 have none), and SoftDevice or bootloader
+self-update (s145 has no MBR, the MBR commands report
+`NRF_ERROR_NOT_SUPPORTED`), which also rules out updating the bootloader
+from a UF2 file.
 
 ## Memory layout
 
@@ -38,6 +43,11 @@ its own vector table at `0x8000` and forwards the SoftDevice interrupts.
 | Application | `0x8000 – 0x47000` | `0x8000 – 0xC7000` | `0x8000 – 0x147000` | `0x8000 – 0x1C9000` |
 | Bootloader settings page | `0x4F000` | `0xCF000` | `0x14F000` | `0x1D1000` |
 | SoftDevice s145 10.0.1 | `0x5A800` | `0xDA800` | `0x15A800` | `0x1DA800` |
+
+With USB DFU the bootloader no longer fits in 31 KB, so the nRF54LM20-DK
+takes 64 KB: bootloader `0x0 – 0xFC00`, CF2 config `0xFC00`, application
+from `0x10000` (`CODE_REGION_1_START`, set in its `board.cmake`; the
+application links with a matching script). The rest is as for nRF54LM20A.
 
 RAM: `0x20000000 – 0x20004800` SoftDevice, bootloader and application from
 `0x20004800`; the last 128 bytes (`0x2003FF80`) hold the BLE peer data and
@@ -53,8 +63,11 @@ The bootloader checks the board buttons on reset:
 - otherwise: boot the application if present, else enter DFU
 - **Double reset** within 500 ms: enter DFU mode
 
-On the nRF54L15-DK, `DFU` is **Button1** and `OTA` is **Button2**. The XIAO
-boards only have the user button (`DFU`); use `GPREGRET` for OTA.
+On the nRF54L15-DK, `DFU` is **Button1** and `OTA` is **Button2**. On the
+nRF54LM20-DK they are **Button 0** and **Button 1**; its RESET button goes
+through the debugger (SWD), so a double reset only registers once RESET is
+wired to the SoC (short SB25, cut SB26). The XIAO boards only have the user
+button (`DFU`); use `GPREGRET` for OTA.
 
 The application can also trigger DFU via the `GPREGRET` register:
 
@@ -68,6 +81,15 @@ void reset_to_dfu(void) {
 Serial DFU runs on the board console UART (UARTE20, the SAMD11 bridge on
 the XIAO, VCOM0 on the DK) at 115200 baud and waits 3 s for the first
 packet when entered through `GPREGRET`.
+
+On the nRF54LM20-DK serial DFU runs over USB CDC on the nRF USB connector
+(J3) instead. Entered through `GPREGRET` `0x4e` (an application's 1200 bps
+touch) it shows only the CDC port, `0x239A:0x4AFE`, and the 3 s wait is
+cancelled once the host mounts it. Entered by button, by `GPREGRET` `0x57`
+or with no valid application it is `0x239A:0x4AFD` with a UF2 drive
+(`LM20DK-BOOT`) as well. A UF2 file may only hold the application (family
+`0x9EEA6BF9`, or the board ID `0x239A4AFD`); a block anywhere else aborts
+the copy.
 
 ## Building
 

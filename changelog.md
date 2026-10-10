@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- nRF54LM20-DK board (`nrf54lm20dk`). It carries an nRF54LM20B: the build
+  targets the A and defines `DEVELOP_IN_NRF54LM20B`, so the MDK applies the
+  B's errata
+- USB DFU on the nRF54LM20 USBHS port, enabled per board with `USB_DFU`
+  (only the nRF54LM20-DK so far): serial DFU over USB CDC, and a UF2 drive
+  unless the application asked for serial DFU only. TinyUSB 0.20 subset
+  under `lib/tinyusb`. The USB stack needs a 64 KB bootloader, so such a
+  board brings its own linker script and moves the application to
+  `0x10000` (`CODE_REGION_1_START`); other boards keep `0x8000` and UART
+  DFU
+- UF2 takes application blocks only (family `0x9EEA6BF9`, picked at random
+  as microsoft/uf2 lists no nRF54 family, or the board ID); a block outside
+  the application aborts the copy. `GPREGRET` `0x57` asks for the UF2 drive,
+  as on Adafruit's bootloaders
+- Verified on an nRF54LM20-DK: serial DFU over USB, UF2 copy and
+  CURRENT.UF2, entry by button and by `GPREGRET`, a UF2 with blocks outside
+  the application and one of another family (application left untouched),
+  and BLE OTA (Button 0 + Button 1, nRF Device Firmware Update)
+
 ## 0.5.0 — 2026-09-24
 
 Promotes 0.5.0-dev1 and 0.5.0-dev2 to a release. No changes since
