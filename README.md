@@ -15,12 +15,13 @@ Based on the Nordic nRF5 SDK bootloader architecture, ported to nRF54L with Soft
 | XIAO nRF54L15 Sense | `xiao_nrf54l15_sense` | nRF54L15 |
 | XIAO nRF54LM20A | `xiao_nrf54lm20a` | nRF54LM20A |
 | nRF54LM20-DK | `nrf54lm20dk` | nRF54LM20B (built as nRF54LM20A) |
+| LM20MeshNode | `lm20meshnode` | nRF54LM20A (Minew ME54BS13) |
 
 ## Features
 
 - DFU over Serial (UART) and OTA (BLE)
 - DFU over USB (CDC) and a UF2 drive on boards that use the nRF54LM20 USB
-  port (nRF54LM20-DK)
+  port (nRF54LM20-DK, LM20MeshNode)
 - Dual bank firmware updates (disabled by default)
 - Signed firmware updates (disabled by default)
 - Watchdog feed-through during DFU

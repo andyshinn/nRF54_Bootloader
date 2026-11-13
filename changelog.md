@@ -5,8 +5,11 @@
 - nRF54LM20-DK board (`nrf54lm20dk`). It carries an nRF54LM20B: the build
   targets the A and defines `DEVELOP_IN_NRF54LM20B`, so the MDK applies the
   B's errata
+- LM20MeshNode board (`lm20meshnode`, https://github.com/cvaldess/LM20MeshNode):
+  nRF54LM20A module with USB DFU like the nRF54LM20-DK; status LED P2.00,
+  OK (P1.28) for DFU, OK + DOWN (P1.25) for OTA
 - USB DFU on the nRF54LM20 USBHS port, enabled per board with `USB_DFU`
-  (only the nRF54LM20-DK so far): serial DFU over USB CDC, and a UF2 drive
+  (nRF54LM20-DK and LM20MeshNode): serial DFU over USB CDC, and a UF2 drive
   unless the application asked for serial DFU only. TinyUSB 0.20 subset
   under `lib/tinyusb`. The USB stack needs a 64 KB bootloader, so such a
   board brings its own linker script and moves the application to
