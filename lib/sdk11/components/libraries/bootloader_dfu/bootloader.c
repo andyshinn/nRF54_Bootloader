@@ -40,8 +40,9 @@
 
 #include "boards.h"
 
-#ifdef NRF_USBD
+#ifdef USB_DFU
 #include "tusb.h"
+#include "usb.h"
 #endif
 
 /**@brief Enumeration for specifying current bootloader status.
@@ -89,7 +90,7 @@ static void pstorage_callback_handler(pstorage_handle_t * p_handle,
  */
 static void dfu_startup_timer_handler(void * p_context)
 {
-#ifdef NRF_USBD
+#ifdef USB_DFU
   if (m_cancel_timeout_on_usb && tud_mounted())
   {
     return;
@@ -138,13 +139,10 @@ static void wait_for_events(void)
     // Event received. Process it from the scheduler.
     app_sched_execute();
 
-#ifdef NRF_USBD
-    // skip if usb is not inited ( e.g OTA / finializing sd/bootloader )
-    if ( tusb_inited() )
-    {
-      tud_task();
-      tud_cdc_write_flush();
-    }
+#ifdef USB_DFU
+    // starts the stack once VBUS is there, then runs it; does nothing unless serial DFU
+    // armed it ( e.g OTA / finializing sd/bootloader )
+    usb_task();
 #endif
 
     if ((m_update_status == BOOTLOADER_COMPLETE) ||

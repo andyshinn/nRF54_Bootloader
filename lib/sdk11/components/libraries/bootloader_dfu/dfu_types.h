@@ -79,9 +79,13 @@ static inline uint32_t sd_softdevice_vector_table_base_set(uint32_t addr)
  * for header compatibility, so L15 must be the fallback. */
 // nRF54L layout (no MBR): bootloader at 0x0, application at 0x8000, settings page just below
 // the SoftDevice which sits at the top of RRAM. The region between the application start and
-// the settings page is what DFU may write.
+// the settings page is what DFU may write. A board whose bootloader needs more than 32 KB (USB
+// DFU) moves the application up by defining CODE_REGION_1_START in its board.cmake, together
+// with a linker script of the same size.
 #define BOOTLOADER_REGION_START             0x00000000
+#ifndef CODE_REGION_1_START
 #define CODE_REGION_1_START                 0x00008000
+#endif
 #if defined(NRF54LM20A_XXAA)
   #define SOFTDEVICE_REGION_START           0x001DA800
   #define BOOTLOADER_SETTINGS_ADDRESS       0x001D1000

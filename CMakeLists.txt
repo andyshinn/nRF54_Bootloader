@@ -79,11 +79,37 @@ add_executable(bootloader
   ${SDK_DIR}/libraries/hci/hci_slip.c
   ${SDK_DIR}/libraries/hci/hci_transport.c
   ${SDK_DIR}/libraries/util/nrf_assert.c
-  # UART transport (nRF54L has no USB)
-  ${SDK_DIR}/libraries/uart/app_uart.c
-  ${SDK_DIR}/drivers_nrf/uart/nrf_drv_uart.c
   ${SDK_DIR}/drivers_nrf/common/nrf_drv_common.c
   )
+
+if (USB_DFU)
+  # Serial DFU over USB CDC and a UF2 drive (nRF54LM20 USBHS, set by board.cmake)
+  set(TUSB_DIR ${CMAKE_CURRENT_LIST_DIR}/lib/tinyusb/src)
+  target_sources(bootloader PUBLIC
+    src/usb/usb.c
+    src/usb/usb_desc.c
+    src/usb/msc_uf2.c
+    src/usb/uf2/ghostfat.c
+    ${TUSB_DIR}/tusb.c
+    ${TUSB_DIR}/common/tusb_fifo.c
+    ${TUSB_DIR}/device/usbd.c
+    ${TUSB_DIR}/class/cdc/cdc_device.c
+    ${TUSB_DIR}/class/msc/msc_device.c
+    ${TUSB_DIR}/portable/synopsys/dwc2/dcd_dwc2.c
+    ${TUSB_DIR}/portable/synopsys/dwc2/dwc2_common.c
+  )
+  target_include_directories(bootloader PUBLIC
+    src/usb
+    ${TUSB_DIR}
+  )
+  target_compile_definitions(bootloader PUBLIC USB_DFU)
+else ()
+  # Serial DFU over UART
+  target_sources(bootloader PUBLIC
+    ${SDK_DIR}/libraries/uart/app_uart.c
+    ${SDK_DIR}/drivers_nrf/uart/nrf_drv_uart.c
+  )
+endif ()
 
 if (DUALBANK_FW)
   target_sources(bootloader PUBLIC
@@ -148,7 +174,10 @@ target_include_directories(bootloader PUBLIC
   ${SDK_DIR}/drivers_nrf/uart
   )
 
-set(LD_FILE ${CMAKE_CURRENT_LIST_DIR}/linker/${MCU_VARIANT}.ld)
+# board.cmake may bring its own (a bigger bootloader for USB DFU)
+if (NOT DEFINED LD_FILE)
+  set(LD_FILE ${CMAKE_CURRENT_LIST_DIR}/linker/${MCU_VARIANT}.ld)
+endif ()
 
 target_link_options(bootloader PUBLIC
   "LINKER:--script=${LD_FILE}"
@@ -313,6 +342,11 @@ target_compile_definitions(bootloader PUBLIC
   BLEDIS_FW_VERSION="${GIT_VERSION} ${SD_NAME} ${SD_VERSION}"
   MK_BOOTLOADER_VERSION=${MK_BOOTLOADER_VERSION}
   )
+
+if (USB_DFU)
+  # INFO_UF2.TXT on the UF2 drive
+  target_compile_definitions(bootloader PUBLIC UF2_VERSION="${GIT_VERSION}")
+endif ()
 
 # Add bin/hex output
 add_custom_command(TARGET bootloader POST_BUILD

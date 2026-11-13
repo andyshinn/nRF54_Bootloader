@@ -44,8 +44,8 @@
 #include "app_uart.h"
 #include "nrf_error.h"
 
-// nRF has native usb peripheral
-#ifdef NRF_USBD
+// native USB (nRF52 USBD, nRF54LM20 USBHS)
+#ifdef USB_DFU
 #include "tusb.h"
 #endif
 
@@ -122,7 +122,7 @@ static uint32_t send_tx_byte_end(void);
  */
 uint32_t (*send_tx_byte) (void) = send_tx_byte_default;
 
-#ifdef NRF_USBD
+#ifdef USB_DFU
 
 static uint32_t serial_put(char ch)
 {
@@ -350,7 +350,7 @@ static bool rx_buffer_overflowed(void)
     return false;
 }
 
-#ifdef NRF_USBD
+#ifdef USB_DFU
 
 static uint32_t slip_uart_open(void)
 {
@@ -447,7 +447,7 @@ uint32_t hci_slip_close()
 {
     m_current_state   = SLIP_OFF;
 
-#ifdef NRF_USBD
+#ifdef USB_DFU
     return NRF_SUCCESS;
 #else
     uint32_t err_code = app_uart_close();
